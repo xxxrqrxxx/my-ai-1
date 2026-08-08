@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getMemories, createMemory, updateMemory, deleteMemory } from '../api.js';
 
 function PlusIcon({ className }) {
   return (
@@ -25,35 +26,54 @@ function TrashIcon({ className }) {
   );
 }
 
-// 初始mock数据
-const initMemories = [
-  { id: 1, title: "口味偏好", text: "不太能吃辣，喜欢奶茶去冰三分糖，讨厌香菜。", tag: "喜好", time: "7月28日更新" },
-  { id: 2, title: "作息习惯", text: "工作日通常凌晨1点前后睡觉，容易熬夜追剧。", tag: "日常", time: "7月25日更新" },
-  { id: 3, title: "重要日子", text: "9月14日生日，喜欢惊喜但不喜欢太隆重的场面。", tag: "重要日子", time: "7月20日更新" },
-];
-const initTabs = ["全部", "喜好", "日常", "重要日子"];
+// 默认分类标签
+const defaultTabs = ["全部", "喜好", "日常", "重要日子"];
 
-// ✅接收onClose回调
 export default function MemoryView({ onClose }) {
   const [isExiting, setIsExiting] = useState(false);
   const [tab, setTab] = useState('全部');
   const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  // 内部状态接管数据
-  const [memories, setMemories] = useState(initMemories);
-  const [memoryTabs, setMemoryTabs] = useState(initTabs);
+  // 记忆数据（从后端获取）
+  const [memories, setMemories] = useState([]);
+  const [memoryTabs, setMemoryTabs] = useState(defaultTabs);
 
   // 弹窗状态
   const [showMemoryModal, setShowMemoryModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null); // 编辑时存当前卡片，新增为null
+  const [editingItem, setEditingItem] = useState(null);
   const [formTitle, setFormTitle] = useState("");
   const [formText, setFormText] = useState("");
   const [formTag, setFormTag] = useState("喜好");
-
   const [showCatModal, setShowCatModal] = useState(false);
   const [newCatInput, setNewCatInput] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  // ✅关闭页面：先播放退场动画，0.28s后执行onClose切回上一页
+  // 页面加载时获取记忆列表
+  useEffect(() => {
+    loadMemories();
+  }, []);
+
+  // 从后端加载记忆
+  const loadMemories = async () => {
+    try {
+      setLoading(true);
+      const data = await getMemories();
+      setMemories(data);
+
+      // 从记忆中提取所有分类，合并到默认分类
+      const tagsFromData = [...new Set(data.map(m => m.tag).filter(Boolean))];
+      const allTabs = ['全部', ...new Set([...defaultTabs.filter(t => t !== '全部'), ...tagsFromData])];
+      setMemoryTabs(allTabs);
+    } catch (error) {
+      console.error('加载记忆失败:', error);
+      alert('加载记忆失败，请检查后端');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 关闭页面
   const handleClosePage = () => {
     setIsExiting(true);
     setTimeout(() => {
@@ -64,7 +84,7 @@ export default function MemoryView({ onClose }) {
   // 筛选记忆列表
   const filtered = memories.filter((m) => {
     const matchTab = tab === '全部' || m.tag === tab;
-    const matchQuery = !query || m.title.includes(query) || m.text.includes(query);
+    const matchQuery = !query || (m.title && m.title.includes(query)) || (m.text && m.text.includes(query));
     return matchTab && matchQuery;
   });
 
@@ -73,51 +93,67 @@ export default function MemoryView({ onClose }) {
     setEditingItem(null);
     setFormTitle("");
     setFormText("");
-    setFormTag(memoryTabs[1]);
+    setFormTag(memoryTabs[1] || '日常');
     setShowMemoryModal(true);
   };
 
   // 打开编辑记忆弹窗
   const openEditMemory = (item) => {
     setEditingItem(item);
-    setFormTitle(item.title);
-    setFormText(item.text);
-    setFormTag(item.tag);
+    setFormTitle(item.title || "");
+    setFormText(item.text || "");
+    setFormTag(item.tag || '日常');
     setShowMemoryModal(true);
   };
 
   // 保存记忆（新增/编辑）
-  const saveMemory = () => {
+  const saveMemory = async () => {
     if (!formTitle.trim() || !formText.trim()) return;
-    const now = new Date();
-    const timeStr = `${now.getMonth() + 1}月${now.getDate()}日更新`;
+    if (saving) return;
 
-    if (editingItem) {
-      // 编辑模式
-      setMemories(prev => prev.map(i => {
-        if (i.id === editingItem.id) {
-          return { ...i, title: formTitle.trim(), text: formText.trim(), tag: formTag, time: timeStr };
+    setSaving(true);
+    try {
+      if (editingItem) {
+        // 编辑模式
+        const updated = await updateMemory(editingItem.id, {
+          title: formTitle.trim(),
+          text: formText.trim(),
+          tag: formTag
+        });
+        setMemories(prev => prev.map(i => i.id === editingItem.id ? updated : i));
+      } else {
+        // 新增模式
+        const newMem = await createMemory({
+          title: formTitle.trim(),
+          text: formText.trim(),
+          tag: formTag
+        });
+        setMemories(prev => [newMem, ...prev]);
+
+        // 如果是新分类，添加到标签列表
+        if (!memoryTabs.includes(formTag)) {
+          setMemoryTabs(prev => [...prev, formTag]);
         }
-        return i;
-      }));
-    } else {
-      // 新增模式
-      const newId = Math.max(...memories.map(x => x.id), 0) + 1;
-      const newMem = {
-        id: newId,
-        title: formTitle.trim(),
-        text: formText.trim(),
-        tag: formTag,
-        time: timeStr
-      };
-      setMemories(prev => [...prev, newMem]);
+      }
+      setShowMemoryModal(false);
+    } catch (error) {
+      console.error('保存记忆失败:', error);
+      alert('保存失败: ' + error.message);
+    } finally {
+      setSaving(false);
     }
-    setShowMemoryModal(false);
   };
 
   // 删除记忆
-  const deleteMemory = (id) => {
-    setMemories(prev => prev.filter(i => i.id !== id));
+  const handleDeleteMemory = async (id) => {
+    if (!confirm('确定要删除这条记忆吗？')) return;
+    try {
+      await deleteMemory(id);
+      setMemories(prev => prev.filter(i => i.id !== id));
+    } catch (error) {
+      console.error('删除记忆失败:', error);
+      alert('删除失败: ' + error.message);
+    }
   };
 
   // 添加新分类
@@ -127,6 +163,25 @@ export default function MemoryView({ onClose }) {
     setMemoryTabs(prev => [...prev, val]);
     setNewCatInput("");
     setShowCatModal(false);
+  };
+
+  // 获取来源标签文字
+  const getSourceLabel = (item) => {
+    if (item.source === 'user') {
+      return '✍️ 手动记录';
+    } else {
+      const modelName = item.model_used || 'AI';
+      return `🤖 ${modelName} 自动压缩`;
+    }
+  };
+
+  // 获取来源标签颜色
+  const getSourceColor = (item) => {
+    if (item.source === 'user') {
+      return { bg: '#E8F5E9', color: '#5A8A5E' };
+    } else {
+      return { bg: '#E3F2FD', color: '#5A7FA8' };
+    }
   };
 
   return (
@@ -144,7 +199,7 @@ export default function MemoryView({ onClose }) {
       }}
     >
       <div style={{ width: '100%', maxWidth: 620, height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* ✅头部：左返回箭头｜中间标题｜右上角加号按钮，和截图UI一致 */}
+        {/* 头部 */}
         <div
           style={{
             display: 'flex',
@@ -155,7 +210,6 @@ export default function MemoryView({ onClose }) {
             zIndex: 10,
           }}
         >
-          {/* 返回按钮 */}
           <button
             onClick={handleClosePage}
             style={{
@@ -174,12 +228,9 @@ export default function MemoryView({ onClose }) {
           >
             ←
           </button>
-
           <span style={{ fontSize: 20, fontWeight: 600, color: '#59414A' }}>
             Nana 的记忆
           </span>
-
-          {/* 右上角新增记忆加号按钮 */}
           <button
             onClick={openAddMemory}
             style={{
@@ -236,7 +287,7 @@ export default function MemoryView({ onClose }) {
             />
           </div>
 
-          {/* 标签栏，末尾放添加分类按钮 */}
+          {/* 标签栏 */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
             {memoryTabs.map((t) => (
               <button
@@ -273,40 +324,67 @@ export default function MemoryView({ onClose }) {
             </button>
           </div>
 
-          {/* 记忆卡片列表，点击卡片打开编辑弹窗 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {filtered.map((m) => (
-              <div
-                key={m.id}
-                onClick={() => openEditMemory(m)}
-                style={{
-                  borderRadius: 20,
-                  padding: '20px 20px',
-                  background: '#FFFDFB',
-                  boxShadow: '0 2px 10px rgba(140,84,104,0.07)',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#E9A9BC' }} />
-                    <span style={{ fontSize:16, fontWeight:600, color:'#8C5468' }}>{m.title}</span>
+          {/* 加载状态 */}
+          {loading && (
+            <div style={{ textAlign:'center', fontSize:14, padding:'60px 20px', color:'#C9AAB2' }}>
+              加载记忆中...
+            </div>
+          )}
+
+          {/* 记忆卡片列表 */}
+          {!loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {filtered.map((m) => {
+                const sourceStyle = getSourceColor(m);
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => openEditMemory(m)}
+                    style={{
+                      borderRadius: 20,
+                      padding: '20px 20px',
+                      background: '#FFFDFB',
+                      boxShadow: '0 2px 10px rgba(140,84,104,0.07)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#E9A9BC' }} />
+                        <span style={{ fontSize:16, fontWeight:600, color:'#8C5468' }}>{m.title}</span>
+                      </div>
+                      <div onClick={(e)=>e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:18, color:'#D8B7BE' }}>
+                        <PencilIcon style={{ width:18, height:18, cursor:'pointer' }} />
+                        <TrashIcon onClick={()=>handleDeleteMemory(m.id)} style={{ width:18, height:18, cursor:'pointer' }} />
+                      </div>
+                    </div>
+
+                    {/* 来源标签 */}
+                    <div style={{ marginBottom: 10 }}>
+                      <span style={{
+                        fontSize: 12,
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        background: sourceStyle.bg,
+                        color: sourceStyle.color,
+                        fontWeight: 500,
+                      }}>
+                        {getSourceLabel(m)}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize:15, lineHeight:1.7, color:'#5B4A4E', marginBottom:10 }}>{m.text}</div>
+                    <div style={{ fontSize:12, textAlign:'right', color:'#CBAAB1' }}>{m.time}</div>
                   </div>
-                  <div onClick={(e)=>e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:18, color:'#D8B7BE' }}>
-                    <PencilIcon style={{ width:18, height:18, cursor:'pointer' }} />
-                    <TrashIcon onClick={()=>deleteMemory(m.id)} style={{ width:18, height:18, cursor:'pointer' }} />
-                  </div>
+                );
+              })}
+              {filtered.length === 0 && !loading && (
+                <div style={{ textAlign:'center', fontSize:14, padding:'60px 20px', color:'#C9AAB2' }}>
+                  没有找到相关的记忆～
                 </div>
-                <div style={{ fontSize:15, lineHeight:1.7, color:'#5B4A4E', marginBottom:10 }}>{m.text}</div>
-                <div style={{ fontSize:12, textAlign:'right', color:'#CBAAB1' }}>{m.time}</div>
-              </div>
-            ))}
-            {filtered.length === 0 && (
-              <div style={{ textAlign:'center', fontSize:14, padding:'60px 20px', color:'#C9AAB2' }}>
-                没有找到相关的记忆～
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -359,7 +437,9 @@ export default function MemoryView({ onClose }) {
             </div>
             <div style={{ display:'flex', gap:12, justifyContent:'flex-end' }}>
               <button onClick={()=>setShowMemoryModal(false)} style={btnCancel}>取消</button>
-              <button onClick={saveMemory} style={btnPrimary}>保存</button>
+              <button onClick={saveMemory} disabled={saving} style={{...btnPrimary, opacity: saving ? 0.6 : 1}}>
+                {saving ? '保存中...' : '保存'}
+              </button>
             </div>
           </div>
         </div>
