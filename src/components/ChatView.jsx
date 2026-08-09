@@ -334,7 +334,7 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
       </div>
 
       {/* 消息区域 - 可滚动 */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0', position: 'relative', zIndex: 10 }}>
         {messages.map(msg => {
           if (msg.type === 'system') {
             return (
@@ -381,10 +381,14 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
                   </div>
                 )}
                 
-                {/* 气泡 */}
+                {/* 气泡 - 左右都用一样的白色果冻样式 */}
                 <div
-                  className={`bubble ${isUser ? 'bubble-user' : 'bubble-ai'}`}
-                  style={{ position: 'relative' }}
+                  className="bubble bubble-ai"
+                  style={{
+                    position: 'relative',
+                    borderBottomLeftRadius: isUser ? 6 : 6,
+                    borderBottomRightRadius: isUser ? 6 : 6,
+                  }}
                 >
                   {/* 图片 */}
                   {msg.image && (
@@ -398,12 +402,12 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '8px 10px',
-                      background: isUser ? 'rgba(255,255,255,0.2)' : 'var(--glass-bg)',
+                      background: 'var(--glass-bg)',
                       borderRadius: 10,
                       marginBottom: 8,
                     }}>
-                      <Icon name="file" size={16} color={isUser ? 'white' : 'var(--text-secondary)'} />
-                      <span style={{ fontSize: 13, color: isUser ? 'white' : 'var(--text-secondary)' }}>
+                      <Icon name="file" size={16} color="var(--text-secondary)" />
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                         {msg.file.name}
                       </span>
                     </div>
@@ -413,7 +417,7 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
                   {msg.poke && (
                     <div style={{
                       fontSize: 12,
-                      color: isUser ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)',
+                      color: 'var(--text-muted)',
                       marginBottom: 4,
                       fontStyle: 'italic',
                     }}>
@@ -471,6 +475,8 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
         flexShrink: 0,
         padding: '8px 12px calc(88px + var(--safe-bottom))',
         background: 'linear-gradient(to top, var(--bg-primary) 80%, transparent)',
+        position: 'relative',
+        zIndex: 60,
       }}>
         {/* 状态栏 */}
         <div style={{
@@ -591,7 +597,7 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
             borderRadius: 16,
             boxShadow: '0 8px 30px var(--shadow-strong)',
             border: '1px solid var(--glass-border)',
-            zIndex: 100,
+            zIndex: 200,
           }}>
             <button
               onClick={() => imageInputRef.current?.click()}
@@ -659,7 +665,7 @@ export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
           <button
             onClick={() => setShowPlusMenu(!showPlusMenu)}
             className="jelly-button"
-            style={{ width: 40, height: 40, flexShrink: 0 }}
+            style={{ width: 40, height: 40, flexShrink: 0, position: 'relative', zIndex: 10 }}
           >
             <Icon name="plus" size={20} />
           </button>
