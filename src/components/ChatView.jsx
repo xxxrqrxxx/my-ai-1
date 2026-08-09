@@ -1,738 +1,742 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { sendMessage, getMessages, createSession } from '../api.js';
-import SettingsView from './SettingsView';
-import Sidebar from './Sidebar';
-import MemoryView from './MemoryView';
-console.log('✅ ChatView 组件已加载');
+import React, { useState, useRef, useEffect } from 'react';
+import { mockMessages, STATUS_PRESETS, MODELS, POKE_ACTIONS, POKE_PARTS } from '../mockData';
 
-export default function ChatView({
-  chatInfo,
-  messages,
-  onOpenSidebar,
-  onOpenSettings,
-  onSendMessage,
-  onChangeModel,
-  onUpdateChatTitle,
-  showSidebar,
-  setShowSidebar,
-  chatList,
-  activeChatId,
-  setActiveChatId,
-  setChatList
-}) {
-  const [showSettings, setShowSettings] = useState(false);
-  const [showModelSelect, setShowModelSelect] = useState(false);
-  const [showMorePanel, setShowMorePanel] = useState(false);
-  const [showMemory, setShowMemory] = useState(false);
+const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
+  const sw = 1.8;
+  switch(name) {
+    case 'menu':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
+    case 'memory':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+    case 'chart':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+    case 'model':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
+    case 'plus':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case 'send':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
+    case 'image':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+    case 'file':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+    case 'poke':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>;
+    case 'x':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    case 'chevron-down':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>;
+    case 'check':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+    default: return null;
+  }
+};
 
-  const [inputText, setInputText] = useState('');
-  const [messageList, setMessageList] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [chatBgImage, setChatBgImage] = useState(null);
+// 思考链弹窗
+function ThoughtModal({ show, thought, onClose }) {
+  if (!show) return null;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{
+        borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        maxHeight: '60vh',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>Thought process</h3>
+          <button onClick={onClose} className="jelly-button" style={{ width: 30, height: 30 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', overflowY: 'auto', maxHeight: 'calc(60vh - 60px)' }}>
+          {thought}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 戳一戳选择面板
+function PokePanel({ show, onSelect, onClose }) {
+  const [action, setAction] = useState('戳戳');
+  const [part, setPart] = useState('脸');
+  
+  if (!show) return null;
+  
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{
+        borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>戳一戳 Arden</h3>
+          <button onClick={onClose} className="jelly-button" style={{ width: 30, height: 30 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>动作</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {POKE_ACTIONS.map(a => (
+              <button
+                key={a}
+                onClick={() => setAction(a)}
+                style={{
+                  padding: '6px 14px', borderRadius: 14, border: 'none', fontSize: 13, cursor: 'pointer',
+                  background: action === a ? 'var(--bg-accent)' : 'var(--glass-bg)',
+                  color: action === a ? 'white' : 'var(--text-secondary)',
+                }}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>部位</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {POKE_PARTS.map(p => (
+              <button
+                key={p}
+                onClick={() => setPart(p)}
+                style={{
+                  padding: '6px 14px', borderRadius: 14, border: 'none', fontSize: 13, cursor: 'pointer',
+                  background: part === p ? 'var(--bg-accent)' : 'var(--glass-bg)',
+                  color: part === p ? 'white' : 'var(--text-secondary)',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <button
+          onClick={() => { onSelect(action, part); onClose(); }}
+          className="jelly-button jelly-button-accent"
+          style={{ width: '100%', height: 44, borderRadius: 22, fontSize: 15 }}
+        >
+          确定
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 模型选择面板
+function ModelPanel({ show, currentModel, onSelect, onClose }) {
+  if (!show) return null;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{
+        borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        maxHeight: '70vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, position: 'sticky', top: 0, background: 'var(--bg-card-solid)', zIndex: 1, paddingBottom: 8 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>选择模型</h3>
+          <button onClick={onClose} className="jelly-button" style={{ width: 30, height: 30 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {MODELS.map(model => (
+            <button
+              key={model.id}
+              onClick={() => { onSelect(model.id); onClose(); }}
+              className="jelly-card"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px', width: '100%', textAlign: 'left',
+                border: 'none', cursor: 'pointer',
+                background: currentModel === model.id ? 'var(--bg-accent-light)' : 'var(--glass-bg)',
+              }}
+            >
+              <div style={{
+                width: 8, height: 8, borderRadius: 2,
+                background: 'var(--bg-accent)',
+              }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{model.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{model.defaultModel}</div>
+              </div>
+              {currentModel === model.id && (
+                <Icon name="check" size={18} color="var(--bg-accent)" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ChatView({ onOpenSidebar, onOpenMemory, onOpenUsage }) {
+  const [messages, setMessages] = useState(mockMessages);
+  const [inputValue, setInputValue] = useState('');
+  const [currentStatus, setCurrentStatus] = useState(STATUS_PRESETS[0]);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showThoughtModal, setShowThoughtModal] = useState(false);
+  const [currentThought, setCurrentThought] = useState('');
+  const [showPokePanel, setShowPokePanel] = useState(false);
+  const [showModelPanel, setShowModelPanel] = useState(false);
+  const [currentModel, setCurrentModel] = useState('qwen');
   const [selectedImage, setSelectedImage] = useState(null);
-  const [currentModel, setCurrentModel] = useState('qwen-plus');
-
-  const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const bgFileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [pendingPoke, setPendingPoke] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
+  
   const messagesEndRef = useRef(null);
-
-  // 清理 Safari blob 预览
-  const cleanPreviewUrl = useCallback((url) => {
-    if (url) {
-      URL.revokeObjectURL(url);
-    }
-  }, []);
-
-  // 加载历史消息
-  useEffect(() => {
-    if (activeChatId) {
-      loadMessages(activeChatId);
-    } else {
-      setMessageList([]);
-    }
-  }, [activeChatId]);
-
-  const loadMessages = async (sessionId) => {
-    try {
-      const data = await getMessages(sessionId);
-      const formatted = data.map(msg => ({
-        id: msg.id,
-        text: msg.content,
-        isSelf: msg.role === 'user',
-        time: new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-      }));
-      setMessageList(formatted);
-    } catch (error) {
-      console.error('加载消息失败:', error);
-    }
-  };
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messageList]);
+  }, [messages]);
 
-  // 发送消息
-  const handleSend = async () => {
-    if ((!inputText.trim() && !selectedImage) || isLoading) return;
+  // 随机切换状态
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const randomIndex = Math.floor(Math.random() * STATUS_PRESETS.length);
+      setCurrentStatus(STATUS_PRESETS[randomIndex]);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, []);
 
-    if (!activeChatId) {
-      try {
-        const newSession = await createSession('新对话');
-        setActiveChatId(newSession.id);
-        setChatList(prev => [newSession, ...prev]);
-        setTimeout(() => {
-          doSendMessage(newSession.id);
-        }, 200);
-        return;
-      } catch (error) {
-        console.error('创建会话失败:', error);
-        alert('创建会话失败，请检查后端');
-        return;
-      }
+  const handleSend = () => {
+    if (!inputValue.trim() && !selectedImage && !selectedFile && !pendingPoke) return;
+    
+    // 戳一戳单独发
+    if (pendingPoke && !inputValue.trim() && !selectedImage && !selectedFile) {
+      const pokeMsg = {
+        id: Date.now(),
+        type: 'system',
+        content: `Nana ${pendingPoke.action}了 Arden 的${pendingPoke.part}`,
+        time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, pokeMsg]);
+      setPendingPoke(null);
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          type: 'ai',
+          content: '哎呀～ 被你发现了！(,,> ω <,,)',
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+          thought: 'Nana戳我了！好开心！要表现得害羞一点，不能太主动，但也不能太冷淡。就用可爱的语气回应吧。',
+          tools: [],
+        }]);
+      }, 1500);
+      return;
     }
-    await doSendMessage(activeChatId);
-  };
-
-  const doSendMessage = async (sessionId) => {
-    setIsLoading(true);
-    const userMessage = inputText.trim();
-    const imageData = selectedImage;
-
-    // 临时显示用户消息（乐观更新）
-    const tempUserMsg = {
+    
+    const newMsg = {
       id: Date.now(),
-      text: userMessage,
-      image: imageData,
-      isSelf: true,
+      type: 'user',
+      content: inputValue,
       time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-      isTemp: true
+      image: selectedImage,
+      file: selectedFile,
+      poke: pendingPoke,
     };
-    setMessageList(prev => [...prev, tempUserMsg]);
-    setInputText('');
-    if (selectedImage) {
-      cleanPreviewUrl(selectedImage);
-      setSelectedImage(null);
+    
+    setMessages(prev => [...prev, newMsg]);
+    setInputValue('');
+    setSelectedImage(null);
+    setSelectedFile(null);
+    setPendingPoke(null);
+    setShowPlusMenu(false);
+    
+    // 模拟AI回复
+    setIsTyping(true);
+    setTimeout(() => {
+      setIsTyping(false);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: '收到啦宝贝～ 我记下来了哦！',
+        time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        thought: '用户发了一条消息，我需要认真思考一下怎么回复比较好。首先要理解用户的意图，然后组织语言，保持温柔的语气。',
+        tools: ['记忆系统'],
+      }]);
+    }, 2000);
+  };
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(URL.createObjectURL(file));
     }
-    setShowMorePanel(false);
+    setShowPlusMenu(false);
+  };
 
-    try {
-      // 调用后端 API（后端会保存用户消息和 AI 回复）
-      const response = await sendMessage(sessionId, userMessage, currentModel);
-      console.log('后端返回:', response);
-
-      // ⭐ 关键改动：直接从数据库重新加载所有消息（包括用户消息和 AI 回复）
-      await loadMessages(sessionId);
-    } catch (error) {
-      console.error('发送失败:', error);
-      setMessageList(prev => prev.filter(msg => !msg.isTemp));
-      alert('发送失败: ' + error.message);
-    } finally {
-      setIsLoading(false);
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile({ name: file.name, size: file.size });
     }
+    setShowPlusMenu(false);
   };
 
-  const handleSelectImage = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (selectedImage) cleanPreviewUrl(selectedImage);
-    const previewUrl = URL.createObjectURL(file);
-    setSelectedImage(previewUrl);
-    setShowMorePanel(false);
+  const handlePokeSelect = (action, part) => {
+    setPendingPoke({ action, part });
   };
 
-  const handleChangeBg = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (chatBgImage) cleanPreviewUrl(chatBgImage);
-    const bgUrl = URL.createObjectURL(file);
-    setChatBgImage(bgUrl);
-    setShowMorePanel(false);
+  const openThought = (thought) => {
+    setCurrentThought(thought);
+    setShowThoughtModal(true);
   };
-
-  const triggerImageSelect = () => fileInputRef.current?.click();
-  const triggerBgSelect = () => bgFileInputRef.current?.click();
-
-  const chatAreaStyle = {
-    flex: 1,
-    overflowY: 'auto',
-    backgroundImage: chatBgImage ? `url(${chatBgImage})` : undefined,
-    backgroundColor: chatBgImage ? 'transparent' : '#FEF4F8',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-    WebkitOverflowScrolling: 'touch'
-  };
-
-  const renderMessages = () => {
-    if (messageList.length === 0) {
-      return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          color: '#C9AAB2',
-          fontSize: 16
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🐰</div>
-            <div>开始和 Nana 聊天吧</div>
-          </div>
-        </div>
-      );
-    }
-    return messageList.map((msg) => (
-      <div
-        key={msg.id}
-        style={{
-          display: 'flex',
-          justifyContent: msg.isSelf ? 'flex-end' : 'flex-start',
-          padding: '10px 16px'
-        }}
-      >
-        <div
-          style={{
-            maxWidth: '72%',
-            backgroundColor: msg.isSelf ? '#F7DCE3' : '#FFFFFF',
-            borderRadius: 18,
-            padding: '12px 14px',
-            boxShadow: '0 2px 6px rgba(140, 84, 104, 0.08)',
-            position: 'relative'
-          }}
-        >
-          {msg.image && (
-            <img
-              src={msg.image}
-              alt="msg"
-              style={{
-                width: '100%',
-                borderRadius: 12,
-                marginBottom: msg.text ? 10 : 0,
-                display: 'block'
-              }}
-            />
-          )}
-          {msg.text && (
-            <div style={{ color: '#4A3B3F', fontSize: 15, lineHeight: 1.6 }}>
-              {msg.text}
-              {msg.isTemp && <span style={{ fontSize: 12, color: '#C9AAB2', marginLeft: 8 }}>⏳</span>}
-            </div>
-          )}
-          <div
-            style={{
-              fontSize: 11,
-              color: '#C9AAB2',
-              textAlign: 'right',
-              marginTop: 6
-            }}
-          >
-            {msg.time}
-          </div>
-        </div>
-      </div>
-    ));
-  };
-
-  if (showSettings) {
-    return (
-      <SettingsView
-        onBack={() => setShowSettings(false)}
-        onOpenMemory={() => {
-          setShowSettings(false);
-          setShowMemory(true);
-        }}
-      />
-    );
-  }
-
-  if (showMemory) {
-    return <MemoryView onClose={() => setShowMemory(false)} />;
-  }
 
   return (
-    <>
-      <style>{`
-        @keyframes slideInLeft {
-          from { transform: translateX(-100%); }
-          to { transform: translateX(0); }
-        }
-      `}</style>
-
-      <div style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: '#FFFFFF',
-        overflow: 'hidden',
-        position: 'relative'
+    <div className="page-container">
+      {/* 顶部栏 - 固定不随滚动移动 */}
+      <div className="glass-header" style={{
+        position: 'relative',
+        zIndex: 50,
+        flexShrink: 0,
+        paddingTop: 'env(safe-area-inset-top)',
+        borderBottom: 'none',
+        boxShadow: '0 6px 24px rgba(200, 130, 160, 0.06)',
       }}>
-        {showSidebar && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
-            <div
-              onClick={() => setShowSidebar(false)}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundColor: 'rgba(0,0,0,0.18)'
-              }}
-            />
-            <Sidebar
-              show={showSidebar}
-              onClose={() => setShowSidebar(false)}
-              chatList={chatList}
-              activeChatId={activeChatId}
-              onSelectChat={() => setShowSidebar(false)}
-              onCreateChat={() => setShowSidebar(false)}
-              onOpenSettings={() => {
-                setShowSidebar(false);
-                setShowSettings(true);
-              }}
-            />
-          </div>
-        )}
-
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 16px',
-          flexShrink: 0,
-          borderBottom: '1px solid #F6DCE2'
+          padding: '10px 12px',
         }}>
-          <button
-            onClick={onOpenSidebar}
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: '50%',
-              border: '1px solid #F0D2DC',
-              backgroundColor: '#FFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 19,
-              color: '#8C5468',
-              cursor: 'pointer'
-            }}
-          >
-            ☰
+          <button onClick={onOpenSidebar} className="jelly-button" style={{ width: 38, height: 38 }}>
+            <Icon name="menu" size={20} />
           </button>
-
-          <span style={{
-            fontSize: 26,
-            fontWeight: 600,
-            color: '#7B4B70'
-          }}>
-            Nana
-          </span>
-
-          <button
-            onClick={() => setShowSettings(true)}
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: '50%',
-              border: '1px solid #F0D2DC',
-              backgroundColor: '#FFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 21,
-              color: '#8C5468',
-              cursor: 'pointer'
-            }}
-          >
-            ⚙️
-          </button>
-        </div>
-
-        <div style={{
-          width: '100%',
-          height: 18,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='18' viewBox='0 0 100 18' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 9c5 0 8-4 12-4s7 4 12 4 8-4 12-4 7 4 12 4 8-4 12-4 7 4 12 4 8-4 12-4 7 4 12 4v9H0V9z' fill='%23F7DCE3' opacity='0.6'/%3E%3Cpath d='M0 14c5 0 8-3 12-3s7 3 12 3 8-3 12-3 7 3 12 3 8-3 12-3 7 3 12 3 8-3 12-3 7 3 12 3v4H0v-4z' fill='%23FCEEF2' opacity='0.5'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat-x',
-          backgroundSize: '100px 18px',
-          flexShrink: 0
-        }} />
-
-        <div style={chatAreaStyle}>
-          {renderMessages()}
-          {isLoading && (
-            <div style={{ padding: '10px 16px', color: '#C9AAB2', fontSize: 14 }}>
-              Nana 正在输入...
+          
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+              Arden
             </div>
-          )}
-          <div ref={messagesEndRef} />
+          </div>
+          
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={onOpenMemory} className="jelly-button" style={{ width: 38, height: 38 }}>
+              <Icon name="memory" size={18} />
+            </button>
+            <button onClick={onOpenUsage} className="jelly-button" style={{ width: 38, height: 38 }}>
+              <Icon name="chart" size={18} />
+            </button>
+            <button onClick={() => setShowModelPanel(true)} className="jelly-button" style={{ width: 38, height: 38 }}>
+              <Icon name="model" size={18} />
+            </button>
+          </div>
         </div>
+      </div>
 
-        {selectedImage && (
+      {/* 消息区域 - 可滚动 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 0' }}>
+        {messages.map(msg => {
+          if (msg.type === 'system') {
+            return (
+              <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+                <div style={{
+                  fontSize: 12,
+                  color: 'var(--text-muted)',
+                  background: 'var(--glass-bg)',
+                  padding: '6px 14px',
+                  borderRadius: 14,
+                  backdropFilter: 'blur(10px)',
+                }}>
+                  {msg.content}
+                </div>
+              </div>
+            );
+          }
+          
+          const isUser = msg.type === 'user';
+          return (
+            <div key={msg.id} style={{
+              display: 'flex',
+              justifyContent: isUser ? 'flex-end' : 'flex-start',
+              marginBottom: 16,
+            }}>
+              <div style={{ maxWidth: '78%' }}>
+                {/* 思考链 - 气泡上方 */}
+                {!isUser && msg.thinking && (
+                  <div
+                    className="thinking-chain"
+                    onClick={() => openThought(msg.thinking)}
+                    style={{ marginBottom: 4, marginLeft: 8 }}
+                  >
+                    <span style={{
+                      display: 'inline-block',
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {msg.thinking}
+                    </span>
+                    <Icon name="chevron-down" size={12} />
+                  </div>
+                )}
+                
+                {/* 气泡 */}
+                <div
+                  className={`bubble ${isUser ? 'bubble-user' : 'bubble-ai'}`}
+                  style={{ position: 'relative' }}
+                >
+                  {/* 图片 */}
+                  {msg.image && (
+                    <img src={msg.image} alt="" style={{
+                      width: '100%', borderRadius: 12, marginBottom: 8,
+                    }} />
+                  )}
+                  
+                  {/* 文件 */}
+                  {msg.file && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 10px',
+                      background: isUser ? 'rgba(255,255,255,0.2)' : 'var(--glass-bg)',
+                      borderRadius: 10,
+                      marginBottom: 8,
+                    }}>
+                      <Icon name="file" size={16} color={isUser ? 'white' : 'var(--text-secondary)'} />
+                      <span style={{ fontSize: 13, color: isUser ? 'white' : 'var(--text-secondary)' }}>
+                        {msg.file.name}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* 戳一戳标记 */}
+                  {msg.poke && (
+                    <div style={{
+                      fontSize: 12,
+                      color: isUser ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)',
+                      marginBottom: 4,
+                      fontStyle: 'italic',
+                    }}>
+                      [{msg.poke.action}了一下]
+                    </div>
+                  )}
+                  
+                  {msg.content}
+                </div>
+                
+                {/* 工具调用 - 气泡下方 */}
+                {!isUser && msg.tools && msg.tools.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, marginLeft: 8 }}>
+                    {msg.tools.map((tool, i) => (
+                      <span key={i} className="tag" style={{ fontSize: 10 }}>
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                {/* 时间 */}
+                <div style={{
+                  fontSize: 10,
+                  color: 'var(--text-muted)',
+                  marginTop: 4,
+                  textAlign: isUser ? 'right' : 'left',
+                  marginRight: isUser ? 4 : 8,
+                }}>
+                  {msg.time}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        
+        {/* 输入中状态 */}
+        {isTyping && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
+            <div className="bubble bubble-ai" style={{ padding: '12px 14px' }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <span className="typing-dot" style={{ animationDelay: '0s' }} />
+                <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
+                <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* 输入区域 - 固定在底部 */}
+      <div style={{
+        flexShrink: 0,
+        padding: '8px 12px calc(88px + var(--safe-bottom))',
+        background: 'linear-gradient(to top, var(--bg-primary) 80%, transparent)',
+      }}>
+        {/* 状态栏 */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          marginBottom: 8,
+        }}>
+          <div className="status-bar">
+            <span className="status-dot" />
+            {currentStatus.zh}
+          </div>
+        </div>
+        
+        {/* 预览条 */}
+        {(selectedImage || selectedFile || pendingPoke) && (
           <div style={{
-            padding: '8px 16px',
-            backgroundColor: '#FFF',
             display: 'flex',
-            alignItems: 'center',
             gap: 8,
-            borderTop: '1px solid #F6DCE2'
+            marginBottom: 8,
+            padding: '0 4px',
+            flexWrap: 'wrap',
           }}>
-            <img
-              src={selectedImage}
-              alt="preview"
-              style={{
-                width: 60,
-                height: 60,
-                objectFit: 'cover',
-                borderRadius: 8
-              }}
-            />
+            {selectedImage && (
+              <div style={{ position: 'relative' }}>
+                <img src={selectedImage} alt="" style={{
+                  width: 60, height: 60, borderRadius: 10, objectFit: 'cover',
+                }} />
+                <button
+                  onClick={() => setSelectedImage(null)}
+                  style={{
+                    position: 'absolute', top: -4, right: -4,
+                    width: 20, height: 20, borderRadius: 10,
+                    background: 'var(--bg-accent)',
+                    border: '2px solid var(--bg-primary)',
+                    color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                  }}
+                >
+                  <Icon name="x" size={10} color="white" />
+                </button>
+              </div>
+            )}
+            {selectedFile && (
+              <div style={{
+                position: 'relative',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 12px',
+                background: 'var(--glass-bg)',
+                borderRadius: 10,
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+              }}>
+                <Icon name="file" size={14} />
+                {selectedFile.name}
+                <button
+                  onClick={() => setSelectedFile(null)}
+                  style={{
+                    position: 'absolute', top: -4, right: -4,
+                    width: 20, height: 20, borderRadius: 10,
+                    background: 'var(--bg-accent)',
+                    border: '2px solid var(--bg-primary)',
+                    color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                  }}
+                >
+                  <Icon name="x" size={10} color="white" />
+                </button>
+              </div>
+            )}
+            {pendingPoke && (
+              <div style={{
+                position: 'relative',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 12px',
+                background: 'var(--bg-accent-light)',
+                borderRadius: 10,
+                fontSize: 12,
+                color: 'var(--bg-accent)',
+              }}>
+                <Icon name="poke" size={14} />
+                {pendingPoke.action} {pendingPoke.part}
+                <button
+                  onClick={() => setPendingPoke(null)}
+                  style={{
+                    position: 'absolute', top: -4, right: -4,
+                    width: 20, height: 20, borderRadius: 10,
+                    background: 'var(--bg-accent)',
+                    border: '2px solid var(--bg-primary)',
+                    color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                  }}
+                >
+                  <Icon name="x" size={10} color="white" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* +号弹出菜单 */}
+        {showPlusMenu && (
+          <div style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            left: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            padding: 8,
+            background: 'var(--bg-card-solid)',
+            backdropFilter: 'blur(40px) saturate(1.8)',
+            borderRadius: 16,
+            boxShadow: '0 8px 30px var(--shadow-strong)',
+            border: '1px solid var(--glass-border)',
+            zIndex: 100,
+          }}>
             <button
-              onClick={() => {
-                cleanPreviewUrl(selectedImage);
-                setSelectedImage(null);
-              }}
+              onClick={() => imageInputRef.current?.click()}
               style={{
-                color: '#8C5468',
-                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px',
+                background: 'transparent',
                 border: 'none',
-                background: 'none',
-                fontSize: 14
+                borderRadius: 10,
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--text-secondary)',
+                textAlign: 'left',
+                minWidth: 120,
               }}
             >
-              移除
+              <Icon name="image" size={16} />
+              图片
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--text-secondary)',
+                textAlign: 'left',
+                minWidth: 120,
+              }}
+            >
+              <Icon name="file" size={16} />
+              文件
+            </button>
+            <button
+              onClick={() => { setShowPokePanel(true); setShowPlusMenu(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--text-secondary)',
+                textAlign: 'left',
+                minWidth: 120,
+              }}
+            >
+              <Icon name="poke" size={16} />
+              戳一戳
             </button>
           </div>
         )}
-
+        
         <div style={{
-          width: '100%',
-          height: 18,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='18' viewBox='0 0 100 18' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 9c5 0 8-4 12-4s7 4 12 4 8-4 12-4 7 4 12 4 8-4 12-4 7 4 12 4 8-4 12-4 7 4 12 4v9H0V9z' fill='%23F7DCE3' opacity='0.6'/%3E%3Cpath d='M0 14c5 0 8-3 12-3s7 3 12 3 8-3 12-3 7 3 12 3 8-3 12-3 7 3 12 3 8-3 12-3 7 3 12 3v4H0v-4z' fill='%23FCEEF2' opacity='0.5'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat-x',
-          backgroundSize: '100px 18px',
-          flexShrink: 0
-        }} />
-
-        <div style={{
-          flexShrink: 0,
-          backgroundColor: '#FFF',
-          borderTop: '1px solid #F6DCE2'
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 8,
+          position: 'relative',
         }}>
-          <div style={{
-            padding: '8px 16px 4px',
-            display: 'flex',
-            gap: 10
-          }}>
-            <button
-              onClick={() => setShowModelSelect(true)}
-              style={{
-                height: 40,
-                borderRadius: 999,
-                border: '1px solid #F0D2DC',
-                backgroundColor: '#FEF2F5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 15,
-                color: '#8C5468',
-                cursor: 'pointer',
-                padding: '0 14px'
-              }}
-            >
-              ⌃ {currentModel}
-            </button>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMemory(true);
-              }}
-              style={{
-                height: 40,
-                borderRadius: 999,
-                border: '1px solid #F0D2DC',
-                backgroundColor: '#FEF2F5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 15,
-                color: '#8C5468',
-                cursor: 'pointer',
-                padding: '0 14px'
-              }}
-            >
-              📋 记忆库
-            </button>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: 10,
-            padding: '8px 16px 12px'
-          }}>
-            <button
-              onClick={handleSend}
-              disabled={isLoading}
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                backgroundColor: isLoading ? '#D4C4C8' : '#A86898',
-                border: 'none',
-                color: '#FFF',
-                fontSize: 18,
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}
-            >
-              ➤
-            </button>
-
-            <input
-              ref={inputRef}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+          <button
+            onClick={() => setShowPlusMenu(!showPlusMenu)}
+            className="jelly-button"
+            style={{ width: 40, height: 40, flexShrink: 0 }}
+          >
+            <Icon name="plus" size={20} />
+          </button>
+          
+          <div style={{ flex: 1 }}>
+            <textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSend();
                 }
               }}
-              placeholder="say something to Nana..."
+              placeholder="说点什么..."
+              rows={1}
               style={{
-                flex: 1,
-                minHeight: 48,
-                maxHeight: 100,
-                borderRadius: 22,
-                border: '1px solid #F0D2DC',
-                backgroundColor: '#FEF2F5',
-                padding: '12px 18px',
-                fontSize: 16,
+                width: '100%',
+                border: 'none',
+                borderRadius: 20,
+                padding: '10px 16px',
+                fontSize: 15,
+                color: 'var(--text-primary)',
+                background: 'var(--glass-bg)',
+                backdropFilter: 'blur(10px)',
                 outline: 'none',
-                color: '#444',
                 resize: 'none',
-                boxSizing: 'border-box'
+                maxHeight: 120,
+                lineHeight: 1.5,
+                fontFamily: 'inherit',
               }}
             />
-
-            <button
-              onClick={() => setShowMorePanel(!showMorePanel)}
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                border: '1px solid #F0D2DC',
-                backgroundColor: '#FFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 22,
-                color: '#A86898',
-                cursor: 'pointer',
-                flexShrink: 0
-              }}
-            >
-              ♡
-            </button>
           </div>
-
-          {showMorePanel && (
-            <div style={{
-              backgroundColor: '#FFF',
-              borderTop: '1px solid #F6DCE2',
-              padding: '16px 12px'
-            }}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 12
-              }}>
-                <div style={{ textAlign: 'center' }}>
-                  <button
-                    onClick={triggerImageSelect}
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 14,
-                      backgroundColor: '#FEF2F5',
-                      border: 'none',
-                      fontSize: 24,
-                      color: '#8C5468',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🖼
-                  </button>
-                  <div style={{ fontSize: 12, color: '#8C5468', marginTop: 4 }}>
-                    图片
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'center' }}>
-                  <button
-                    onClick={triggerBgSelect}
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 14,
-                      backgroundColor: '#FEF2F5',
-                      border: 'none',
-                      fontSize: 24,
-                      color: '#8C5468',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🖼
-                  </button>
-                  <div style={{ fontSize: 12, color: '#8C5468', marginTop: 4 }}>
-                    设置背景
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'center' }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMorePanel(false);
-                      setShowMemory(true);
-                    }}
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 14,
-                      backgroundColor: '#FEF2F5',
-                      border: 'none',
-                      fontSize: 24,
-                      color: '#8C5468',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    📋
-                  </button>
-                  <div style={{ fontSize: 12, color: '#8C5468', marginTop: 4 }}>
-                    记忆库
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'center' }}>
-                  <button
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 14,
-                      backgroundColor: '#FEF2F5',
-                      border: 'none',
-                      fontSize: 24,
-                      color: '#B98A96',
-                      cursor: 'not-allowed'
-                    }}
-                  >
-                    📎
-                  </button>
-                  <div style={{ fontSize: 12, color: '#B98A96', marginTop: 4 }}>
-                    文件
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {showModelSelect && (
-          <div
-            onClick={() => setShowModelSelect(false)}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 99
-            }}
+          
+          <button
+            onClick={handleSend}
+            className="jelly-button jelly-button-accent"
+            style={{ width: 40, height: 40, flexShrink: 0 }}
           >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: '80%',
-                maxWidth: 320,
-                backgroundColor: '#FFF',
-                borderRadius: 18,
-                overflow: 'hidden'
-              }}
-            >
-              <div style={{
-                padding: 16,
-                textAlign: 'center',
-                fontSize: 17,
-                fontWeight: 500,
-                color: '#7B4B70',
-                borderBottom: '1px solid #F6DCE2'
-              }}>
-                选择模型
-              </div>
-
-              {['qwen-plus', 'claude-sonnet-5', 'deepseek'].map((m) => (
-                <button
-                  key={m}
-                  onClick={() => {
-                    setCurrentModel(m);
-                    setShowModelSelect(false);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: 14,
-                    textAlign: 'center',
-                    border: 'none',
-                    backgroundColor: currentModel === m ? '#FEF2F5' : '#FFF',
-                    fontSize: 16,
-                    color: '#8C5468',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {m}
-                </button>
-              ))}
-
-              <button
-                onClick={() => setShowModelSelect(false)}
-                style={{
-                  width: '100%',
-                  padding: 14,
-                  textAlign: 'center',
-                  border: 'none',
-                  borderTop: '1px solid #F6DCE2',
-                  backgroundColor: '#FFF',
-                  fontSize: 16,
-                  color: '#A86898',
-                  cursor: 'pointer'
-                }}
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        )}
-
+            <Icon name="send" size={18} color="white" />
+          </button>
+        </div>
+        
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleImageSelect}
+        />
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept=".txt,.docx,.pdf,.md"
           style={{ display: 'none' }}
-          onChange={handleSelectImage}
-        />
-        <input
-          ref={bgFileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={handleChangeBg}
+          onChange={handleFileSelect}
         />
       </div>
-    </>
+
+      <ThoughtModal
+        show={showThoughtModal}
+        thought={currentThought}
+        onClose={() => setShowThoughtModal(false)}
+      />
+      
+      <PokePanel
+        show={showPokePanel}
+        onSelect={handlePokeSelect}
+        onClose={() => setShowPokePanel(false)}
+      />
+      
+      <ModelPanel
+        show={showModelPanel}
+        currentModel={currentModel}
+        onSelect={setCurrentModel}
+        onClose={() => setShowModelPanel(false)}
+      />
+    </div>
   );
 }

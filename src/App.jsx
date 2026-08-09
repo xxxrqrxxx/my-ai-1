@@ -1,146 +1,100 @@
-import React, { useState } from 'react';
-import { createSession } from './api.js';  // ← 新增导入
-
-import Sidebar from './components/Sidebar.jsx';
-import ChatView from './components/ChatView.jsx';
-import WelcomeModal from './components/WelcomeModal.jsx';
-import SettingsView from './components/SettingsView.jsx';
-import MemoryView from './components/MemoryView.jsx';
-import SettingsDetailView from './components/SettingsDetailView.jsx';
+import React, { useState, useEffect } from 'react';
+import './theme.css';
+import BottomNav from './components/BottomNav';
+import FloatingHearts from './components/FloatingHearts';
+import HomeView from './components/HomeView';
+import ChatView from './components/ChatView';
+import MemoryView from './components/MemoryView';
+import DiaryView from './components/DiaryView';
+import McpView from './components/McpView';
+import SettingsView from './components/SettingsView';
+import Sidebar from './components/Sidebar';
+import WelcomeModal from './components/WelcomeModal';
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState('chat');
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeChatId, setActiveChatId] = useState(null);
-  const [chatList, setChatList] = useState([]);
-  const [chatMap, setChatMap] = useState({});
-  const [currentModel, setCurrentModel] = useState("deepseek");
-
-  // 页面层级状态
   const [showWelcome, setShowWelcome] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showMemory, setShowMemory] = useState(false);
-  const [showSettingsDetail, setShowSettingsDetail] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const aiName = 'Arden';
+  const userName = 'Nana';
 
-  // 更新对话标题
-  const handleUpdateChatTitle = (chatId, newTitle) => {
-    setChatList(prev => prev.map(item => {
-      if (item.id === chatId) return { ...item, title: newTitle };
-      return item;
-    }));
-  };
+  // 检测键盘弹起
+  useEffect(() => {
+    if (!window.visualViewport) return;
+    const handleResize = () => {
+      const heightDiff = window.innerHeight - window.visualViewport.height;
+      setKeyboardOpen(heightDiff > 100);
+    };
+    window.visualViewport.addEventListener('resize', handleResize);
+    return () => window.visualViewport.removeEventListener('resize', handleResize);
+  }, []);
 
-  // 新建对话（改为调用后端 API）
-  const handleCreateChat = async () => {
-    try {
-      const newSession = await createSession('新对话');
-      const newChatItem = {
-        id: newSession.id,
-        title: newSession.name || '新对话',
-        time: new Date().toLocaleTimeString()
-      };
-      setChatList(prev => [newChatItem, ...prev]);
-      setActiveChatId(newSession.id);
-      setShowSidebar(false);
-    } catch (error) {
-      console.error('创建会话失败:', error);
-      alert('创建会话失败，请检查后端');
+  // 设置浏览器主题色
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    meta.content = '#FFF0F5';
+  }, []);
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'home':
+        return <HomeView userName={userName} onOpenChat={() => setCurrentPage('chat')} onOpenDiary={() => setCurrentPage('diary')} />;
+      case 'chat':
+        return <ChatView aiName={aiName} userName={userName} onOpenSidebar={() => setShowSidebar(true)} onOpenMemory={() => setCurrentPage('memory')} onOpenUsage={() => setCurrentPage('settings')} />;
+      case 'memory':
+        return <MemoryView />;
+      case 'diary':
+        return <DiaryView />;
+      case 'mcp':
+        return <McpView />;
+      case 'settings':
+        return <SettingsView />;
+      default:
+        return <ChatView aiName={aiName} userName={userName} onOpenSidebar={() => setShowSidebar(true)} />;
     }
   };
 
-  const handleWelcomeEnter = () => {
-    setShowWelcome(false);
-    handleCreateChat();
-  };
-
-  const handleSelectChat = (chatId) => {
-    setActiveChatId(chatId);
-    setShowSidebar(false);
-  };
-
-  const handleSendMessage = (msgObj) => {
-    if (!activeChatId) return;
-    setChatMap(prev => ({
-      ...prev,
-      [activeChatId]: [...(prev[activeChatId] || []), msgObj]
-    }));
-  };
-
-  // ----- 设置页面跳转逻辑 -----
-  const handleOpenSettings = () => {
-    setShowSettings(true);
-  };
-  const handleSettingsBack = () => {
-    setShowSettings(false);
-  };
-  const handleOpenMemory = () => {
-    setShowMemory(true);
-  };
-  const handleMemoryBack = () => {
-    setShowMemory(false);
-  };
-  const handleOpenSettingsDetail = () => {
-    setShowSettingsDetail(true);
-  };
-  const handleSettingsDetailBack = () => {
-    setShowSettingsDetail(false);
-  };
-
-  const currentChatInfo = activeChatId ? chatList.find(c => c.id === activeChatId) : null;
-  const currentMessages = activeChatId ? (chatMap[activeChatId] || []) : [];
-
   return (
-    <div style={{ height: "100vh", width: "100vw", overflow: "hidden", position: "relative" }}>
-      {!showWelcome && (
-        <ChatView
-          chatInfo={currentChatInfo}
-          messages={currentMessages}
-          onOpenSidebar={() => setShowSidebar(true)}
-          onOpenSettings={handleOpenSettings}
-          onSendMessage={handleSendMessage}
-          onChangeModel={(m) => setCurrentModel(m)}
-          onUpdateChatTitle={(t) => handleUpdateChatTitle(activeChatId, t)}
-          showSidebar={showSidebar}
-          setShowSidebar={setShowSidebar}
-          chatList={chatList}
-          activeChatId={activeChatId}
-          setActiveChatId={setActiveChatId}
-          setChatList={setChatList}
-        />
+    <div style={{ 
+      height: '100vh', 
+      width: '100vw', 
+      overflow: 'hidden', 
+      position: 'relative',
+      background: 'linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%)',
+    }}>
+      <FloatingHearts />
+      {renderPage()}
+      
+      {!keyboardOpen && (
+        <BottomNav activeTab={currentPage} onTabChange={setCurrentPage} />
       )}
 
-      <Sidebar
-        show={showSidebar}
-        onClose={() => setShowSidebar(false)}
-        chatList={chatList}
-        activeChatId={activeChatId}
-        onSelectChat={handleSelectChat}
-        onCreateChat={handleCreateChat}
-        onOpenSettings={handleOpenSettings}
-      />
-
-      <WelcomeModal show={showWelcome} onEnter={handleWelcomeEnter} />
-
-      {showSettings && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 400 }}>
-          <SettingsView
-            onBack={handleSettingsBack}
-            onOpenMemory={handleOpenMemory}
-            onOpenSettingsDetail={handleOpenSettingsDetail}
+      {showSidebar && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000 }}>
+          <div onClick={() => setShowSidebar(false)} style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(60, 40, 55, 0.3)',
+            backdropFilter: 'blur(6px)',
+          }} />
+          <Sidebar
+            show={showSidebar}
+            onClose={() => setShowSidebar(false)}
+            chatList={[]}
+            activeChatId={null}
+            onSelectChat={() => setShowSidebar(false)}
+            onCreateChat={() => setShowSidebar(false)}
+            onOpenSettings={() => { setShowSidebar(false); setCurrentPage('settings'); }}
           />
         </div>
       )}
 
-      {showMemory && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 410 }}>
-          <MemoryView onBack={handleMemoryBack} />
-        </div>
-      )}
-
-      {showSettingsDetail && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 420 }}>
-          <SettingsDetailView onBack={handleSettingsDetailBack} />
-        </div>
-      )}
+      <WelcomeModal show={showWelcome} onEnter={() => setShowWelcome(false)} />
     </div>
   );
 }

@@ -1,549 +1,326 @@
-import React, { useState, useEffect } from 'react';
-import { getMemories, createMemory, updateMemory, deleteMemory } from '../api.js';
+import React, { useState } from 'react';
+import { mockMemories, MEMORY_CATEGORIES } from '../mockData';
 
-function PlusIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none">
-      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
+const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
+  const sw = 1.8;
+  switch(name) {
+    case 'plus':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case 'search':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+    case 'x':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    case 'edit':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    case 'trash':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    case 'minus':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    default: return null;
+  }
+};
 
-function PencilIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="2" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
+export default function MemoryView() {
+  const [memories, setMemories] = useState(mockMemories);
+  const [activeCategory, setActiveCategory] = useState('全部');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [showAddTag, setShowAddTag] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [customTags, setCustomTags] = useState([]);
+  const [editingMemory, setEditingMemory] = useState(null);
+  const [newMemory, setNewMemory] = useState({ title: '', content: '', category: '日常' });
 
-function TrashIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none">
-      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-// 默认分类标签
-const defaultTabs = ["全部", "喜好", "日常", "重要日子"];
-
-export default function MemoryView({ onClose }) {
-  const [isExiting, setIsExiting] = useState(false);
-  const [tab, setTab] = useState('全部');
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  // 记忆数据（从后端获取）
-  const [memories, setMemories] = useState([]);
-  const [memoryTabs, setMemoryTabs] = useState(defaultTabs);
-
-  // 弹窗状态
-  const [showMemoryModal, setShowMemoryModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [formTitle, setFormTitle] = useState("");
-  const [formText, setFormText] = useState("");
-  const [formTag, setFormTag] = useState("喜好");
-  const [showCatModal, setShowCatModal] = useState(false);
-  const [newCatInput, setNewCatInput] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // 页面加载时获取记忆列表
-  useEffect(() => {
-    loadMemories();
-  }, []);
-
-  // 从后端加载记忆
-  const loadMemories = async () => {
-    try {
-      setLoading(true);
-      const data = await getMemories();
-      setMemories(data);
-
-      // 从记忆中提取所有分类，合并到默认分类
-      const tagsFromData = [...new Set(data.map(m => m.tag).filter(Boolean))];
-      const allTabs = ['全部', ...new Set([...defaultTabs.filter(t => t !== '全部'), ...tagsFromData])];
-      setMemoryTabs(allTabs);
-    } catch (error) {
-      console.error('加载记忆失败:', error);
-      alert('加载记忆失败，请检查后端');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 关闭页面
-  const handleClosePage = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onClose?.();
-    }, 280);
-  };
-
-  // 筛选记忆列表
-  const filtered = memories.filter((m) => {
-    const matchTab = tab === '全部' || m.tag === tab;
-    const matchQuery = !query || (m.title && m.title.includes(query)) || (m.text && m.text.includes(query));
-    return matchTab && matchQuery;
+  const allCategories = ['全部', ...MEMORY_CATEGORIES, ...customTags];
+  
+  const filtered = memories.filter(m => {
+    const matchCat = activeCategory === '全部' || m.category === activeCategory;
+    const matchSearch = !searchQuery || 
+      m.title.includes(searchQuery) || 
+      m.content.includes(searchQuery);
+    return matchCat && matchSearch;
   });
 
-  // 打开新增记忆弹窗
-  const openAddMemory = () => {
-    setEditingItem(null);
-    setFormTitle("");
-    setFormText("");
-    setFormTag(memoryTabs[1] || '日常');
-    setShowMemoryModal(true);
-  };
+  // 找出没有记忆的空标签
+  const emptyTags = customTags.filter(tag => !memories.some(m => m.category === tag));
 
-  // 打开编辑记忆弹窗
-  const openEditMemory = (item) => {
-    setEditingItem(item);
-    setFormTitle(item.title || "");
-    setFormText(item.text || "");
-    setFormTag(item.tag || '日常');
-    setShowMemoryModal(true);
-  };
-
-  // 保存记忆（新增/编辑）
-  const saveMemory = async () => {
-    if (!formTitle.trim() || !formText.trim()) return;
-    if (saving) return;
-
-    setSaving(true);
-    try {
-      if (editingItem) {
-        // 编辑模式
-        const updated = await updateMemory(editingItem.id, {
-          title: formTitle.trim(),
-          text: formText.trim(),
-          tag: formTag
-        });
-        setMemories(prev => prev.map(i => i.id === editingItem.id ? updated : i));
-      } else {
-        // 新增模式
-        const newMem = await createMemory({
-          title: formTitle.trim(),
-          text: formText.trim(),
-          tag: formTag
-        });
-        setMemories(prev => [newMem, ...prev]);
-
-        // 如果是新分类，添加到标签列表
-        if (!memoryTabs.includes(formTag)) {
-          setMemoryTabs(prev => [...prev, formTag]);
-        }
-      }
-      setShowMemoryModal(false);
-    } catch (error) {
-      console.error('保存记忆失败:', error);
-      alert('保存失败: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // 删除记忆
-  const handleDeleteMemory = async (id) => {
-    if (!confirm('确定要删除这条记忆吗？')) return;
-    try {
-      await deleteMemory(id);
-      setMemories(prev => prev.filter(i => i.id !== id));
-    } catch (error) {
-      console.error('删除记忆失败:', error);
-      alert('删除失败: ' + error.message);
-    }
-  };
-
-  // 添加新分类
-  const saveNewCategory = () => {
-    const val = newCatInput.trim();
-    if (!val || memoryTabs.includes(val)) return;
-    setMemoryTabs(prev => [...prev, val]);
-    setNewCatInput("");
-    setShowCatModal(false);
-  };
-
-  // 获取来源标签文字
-  const getSourceLabel = (item) => {
-    if (item.source === 'user') {
-      return '✍️ 手动记录';
+  const handleSave = () => {
+    if (!newMemory.title.trim() || !newMemory.content.trim()) return;
+    if (editingMemory) {
+      setMemories(prev => prev.map(m => m.id === editingMemory.id ? {
+        ...m,
+        title: newMemory.title,
+        content: newMemory.content,
+        category: newMemory.category,
+      } : m));
     } else {
-      const modelName = item.model_used || 'AI';
-      return `🤖 ${modelName} 自动压缩`;
+      setMemories(prev => [{
+        id: Date.now(),
+        title: newMemory.title,
+        content: newMemory.content,
+        category: newMemory.category,
+        source: 'user',
+        model: null,
+        time: new Date().toISOString().split('T')[0],
+      }, ...prev]);
     }
+    setNewMemory({ title: '', content: '', category: '日常' });
+    setShowNewForm(false);
+    setEditingMemory(null);
   };
 
-  // 获取来源标签颜色
-  const getSourceColor = (item) => {
-    if (item.source === 'user') {
-      return { bg: '#E8F5E9', color: '#5A8A5E' };
-    } else {
-      return { bg: '#E3F2FD', color: '#5A7FA8' };
+  const handleAddTag = () => {
+    if (newTagName.trim() && !allCategories.includes(newTagName.trim())) {
+      setCustomTags(prev => [...prev, newTagName.trim()]);
     }
+    setNewTagName('');
+    setShowAddTag(false);
+  };
+
+  const handleDeleteEmptyTags = () => {
+    setCustomTags(prev => prev.filter(tag => memories.some(m => m.category === tag)));
+  };
+
+  const handleEdit = (memory) => {
+    setEditingMemory(memory);
+    setNewMemory({ title: memory.title, content: memory.content, category: memory.category });
+    setShowNewForm(true);
+  };
+
+  const handleDelete = (id) => {
+    setMemories(prev => prev.filter(m => m.id !== id));
   };
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        background: 'linear-gradient(135deg, #FBF2F1 0%, #F7E6EA 48%, #FCEEF2 100%)',
-        animation: isExiting ? 'slideOutRight 0.28s ease-in forwards' : 'slideInRight 0.32s ease-out',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 620, height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* 头部 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '24px 20px 16px 20px',
-            flexShrink: 0,
-            zIndex: 10,
-          }}
-        >
-          <button
-            onClick={handleClosePage}
-            style={{
-              width:48,
-              height:48,
-              borderRadius:'16px',
-              border:'1px solid #E8D2D8',
-              backgroundColor:'#ffffff99',
-              display:'flex',
-              alignItems:'center',
-              justifyContent:'center',
-              fontSize:22,
-              color:'#6B4854',
-              cursor:'pointer'
-            }}
-          >
-            ←
-          </button>
-          <span style={{ fontSize: 20, fontWeight: 600, color: '#59414A' }}>
-            Nana 的记忆
-          </span>
-          <button
-            onClick={openAddMemory}
-            style={{
-              width:48,
-              height:48,
-              borderRadius:'16px',
-              border:'1px solid #E8D2D8',
-              backgroundColor:'#ffffff99',
-              display:'flex',
-              alignItems:'center',
-              justifyContent:'center',
-              fontSize:24,
-              color:'#6B4854',
-              cursor:'pointer'
-            }}
-          >
-            +
-          </button>
+    <div className="page-container">
+      <div className="page-content" style={{ padding: '50px 16px 100px' }}>
+        <div style={{ marginBottom: 18, textAlign: 'center' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+            Memory
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Arden 记得关于你的一切</p>
         </div>
 
-        {/* 内容滚动区域 */}
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '0 20px 24px 20px',
-            zIndex: 5,
-          }}
-        >
-          {/* 搜索框 */}
-          <div
+        <div className="jelly-card" style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', marginBottom: 14,
+        }}>
+          <Icon name="search" size={18} />
+          <input
+            type="text"
+            placeholder="搜索记忆..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 999,
-              padding: '14px 20px',
-              background: '#FFFDFB',
-              boxShadow: '0 2px 10px rgba(140,84,104,0.07)',
-              marginBottom: 18,
+              flex: 1, border: 'none', background: 'transparent',
+              fontSize: 14, color: 'var(--text-primary)', outline: 'none',
             }}
-          >
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索记忆"
-              style={{
-                background: 'transparent',
-                fontSize: 15,
-                outline: 'none',
-                width: '100%',
-                color: '#4A3B3F',
-                border: 'none',
-              }}
-            />
-          </div>
+          />
+        </div>
 
-          {/* 标签栏 */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-            {memoryTabs.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                style={{
-                  fontSize: 14,
-                  padding: '10px 18px',
-                  borderRadius: 999,
-                  background: tab === t ? '#F6DDE3' : '#FFFDFB',
-                  color: tab === t ? '#8C5468' : '#B98A96',
-                  fontWeight: tab === t ? 600 : 400,
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: tab === t ? '0 1px 4px rgba(140,84,104,0.08)' : 'none',
-                }}
-              >
-                {t}
-              </button>
-            ))}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, alignItems: 'center' }}>
+          {allCategories.map(cat => (
             <button
-              onClick={() => setShowCatModal(true)}
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
               style={{
-                fontSize: 14,
-                padding: '10px 16px',
-                borderRadius: 999,
-                background: '#FFFDFB',
-                color: '#8C5468',
-                border: '1px dashed #D8B7BE',
+                flexShrink: 0,
+                padding: '6px 14px',
+                borderRadius: 16,
+                border: 'none',
+                fontSize: 13,
                 cursor: 'pointer',
+                background: activeCategory === cat ? 'var(--bg-accent)' : 'var(--glass-bg)',
+                color: activeCategory === cat ? 'white' : 'var(--text-secondary)',
+                transition: 'all 0.2s',
               }}
             >
-              +添加分类
+              {cat}
             </button>
-          </div>
-
-          {/* 加载状态 */}
-          {loading && (
-            <div style={{ textAlign:'center', fontSize:14, padding:'60px 20px', color:'#C9AAB2' }}>
-              加载记忆中...
-            </div>
-          )}
-
-          {/* 记忆卡片列表 */}
-          {!loading && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {filtered.map((m) => {
-                const sourceStyle = getSourceColor(m);
-                return (
-                  <div
-                    key={m.id}
-                    onClick={() => openEditMemory(m)}
-                    style={{
-                      borderRadius: 20,
-                      padding: '20px 20px',
-                      background: '#FFFDFB',
-                      boxShadow: '0 2px 10px rgba(140,84,104,0.07)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#E9A9BC' }} />
-                        <span style={{ fontSize:16, fontWeight:600, color:'#8C5468' }}>{m.title}</span>
-                      </div>
-                      <div onClick={(e)=>e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:18, color:'#D8B7BE' }}>
-                        <PencilIcon style={{ width:18, height:18, cursor:'pointer' }} />
-                        <TrashIcon onClick={()=>handleDeleteMemory(m.id)} style={{ width:18, height:18, cursor:'pointer' }} />
-                      </div>
-                    </div>
-
-                    {/* 来源标签 */}
-                    <div style={{ marginBottom: 10 }}>
-                      <span style={{
-                        fontSize: 12,
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                        background: sourceStyle.bg,
-                        color: sourceStyle.color,
-                        fontWeight: 500,
-                      }}>
-                        {getSourceLabel(m)}
-                      </span>
-                    </div>
-
-                    <div style={{ fontSize:15, lineHeight:1.7, color:'#5B4A4E', marginBottom:10 }}>{m.text}</div>
-                    <div style={{ fontSize:12, textAlign:'right', color:'#CBAAB1' }}>{m.time}</div>
-                  </div>
-                );
-              })}
-              {filtered.length === 0 && !loading && (
-                <div style={{ textAlign:'center', fontSize:14, padding:'60px 20px', color:'#C9AAB2' }}>
-                  没有找到相关的记忆～
-                </div>
-              )}
-            </div>
+          ))}
+          <button
+            onClick={() => setShowAddTag(true)}
+            style={{
+              flexShrink: 0, width: 28, height: 28, borderRadius: 14,
+              border: '1px dashed var(--text-muted)', background: 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: 'var(--text-muted)',
+            }}
+          >
+            <Icon name="plus" size={14} color="var(--text-muted)" />
+          </button>
+          {emptyTags.length > 0 && (
+            <button
+              onClick={handleDeleteEmptyTags}
+              style={{
+                flexShrink: 0, width: 28, height: 28, borderRadius: 14,
+                border: '1px dashed #E87070', background: 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: '#E87070',
+              }}
+              title="删除空标签"
+            >
+              <Icon name="minus" size={14} color="#E87070" />
+            </button>
           )}
         </div>
-      </div>
 
-      {/* ========== 新增/编辑记忆弹窗 ========== */}
-      {showMemoryModal && (
-        <div className="modal-mask" onClick={()=>setShowMemoryModal(false)} style={maskStyle}>
-          <div onClick={e=>e.stopPropagation()} style={modalBoxStyle}>
-            <h3 style={{ margin:0, marginBottom:18, fontSize:17, color:'#4A3B3F' }}>
-              {editingItem ? "编辑记忆" : "新增记忆"}
-            </h3>
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:13, color:'#8C5468', display:'block', marginBottom:6 }}>标题</label>
-              <input
-                value={formTitle}
-                onChange={e=>setFormTitle(e.target.value)}
-                placeholder="输入标题"
-                style={inputStyle}
-              />
-            </div>
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:13, color:'#8C5468', display:'block', marginBottom:6 }}>详情</label>
-              <textarea
-                value={formText}
-                onChange={e=>setFormText(e.target.value)}
-                placeholder="填写记忆详情"
-                rows={4}
-                style={{...inputStyle, resize:'none'}}
-              />
-            </div>
-            <div style={{ marginBottom:22 }}>
-              <label style={{ fontSize:13, color:'#8C5468', display:'block', marginBottom:10 }}>选择分类</label>
-              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-                {memoryTabs.filter(x=>x!=='全部').map(t=>(
-                  <label key={t} style={radioLabelStyle}>
-                    <input
-                      type="radio"
-                      name="memTag"
-                      value={t}
-                      checked={formTag===t}
-                      onChange={()=>setFormTag(t)}
-                      style={{
-                        marginRight: 5,
-                        accentColor: "#8C5468"
-                      }}
-                    />
-                    {t}
-                  </label>
-                ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {filtered.map(mem => (
+            <div key={mem.id} className="jelly-card" style={{ padding: 16, position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingRight: 70 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
+                  {mem.title}
+                </h3>
+                <span className="tag">{mem.category}</span>
+              </div>
+              <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', marginBottom: 8, paddingRight: 70 }}>
+                {mem.content}
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                <span>{mem.time}</span>
+                {mem.source === 'auto' && mem.model && (
+                  <>
+                    <span>·</span>
+                    <span>由 {mem.model} 自动压缩</span>
+                  </>
+                )}
+              </div>
+              {/* 右下角两个圆形按钮 */}
+              <div style={{ position: 'absolute', right: 12, bottom: 12, display: 'flex', gap: 6 }}>
+                <button
+                  onClick={() => handleEdit(mem)}
+                  className="jelly-button"
+                  style={{ width: 30, height: 30, borderRadius: 15 }}
+                >
+                  <Icon name="edit" size={14} color="var(--bg-accent)" />
+                </button>
+                <button
+                  onClick={() => handleDelete(mem.id)}
+                  className="jelly-button"
+                  style={{ width: 30, height: 30, borderRadius: 15 }}
+                >
+                  <Icon name="trash" size={14} color="#E87070" />
+                </button>
               </div>
             </div>
-            <div style={{ display:'flex', gap:12, justifyContent:'flex-end' }}>
-              <button onClick={()=>setShowMemoryModal(false)} style={btnCancel}>取消</button>
-              <button onClick={saveMemory} disabled={saving} style={{...btnPrimary, opacity: saving ? 0.6 : 1}}>
-                {saving ? '保存中...' : '保存'}
+          ))}
+        </div>
+
+        <button
+          onClick={() => { setEditingMemory(null); setNewMemory({ title: '', content: '', category: '日常' }); setShowNewForm(true); }}
+          className="jelly-button jelly-button-accent"
+          style={{
+            position: 'fixed',
+            bottom: 'calc(90px + var(--safe-bottom))',
+            right: 20,
+            width: 52, height: 52,
+            borderRadius: 26,
+            boxShadow: '0 6px 20px rgba(232, 145, 181, 0.4)',
+          }}
+        >
+          <Icon name="plus" size={24} color="white" />
+        </button>
+
+        {/* 添加标签弹窗 */}
+        {showAddTag && (
+          <div className="modal-overlay modal-center" onClick={() => setShowAddTag(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14 }}>
+                添加标签
+              </h3>
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="标签名称"
+                className="jelly-input"
+                style={{ marginBottom: 14 }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setShowAddTag(false)} className="jelly-button" style={{
+                  flex: 1, height: 42, borderRadius: 21, fontSize: 14,
+                }}>
+                  取消
+                </button>
+                <button onClick={handleAddTag} className="jelly-button jelly-button-accent" style={{
+                  flex: 1, height: 42, borderRadius: 21, fontSize: 14,
+                }}>
+                  添加
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 新建/编辑记忆弹窗 */}
+        {showNewForm && (
+          <div className="modal-overlay" onClick={() => { setShowNewForm(false); setEditingMemory(null); }}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {editingMemory ? '修改记忆' : '新建记忆'}
+                </h3>
+                <button onClick={() => { setShowNewForm(false); setEditingMemory(null); }} className="jelly-button" style={{ width: 32, height: 32 }}>
+                  <Icon name="x" size={18} />
+                </button>
+              </div>
+              
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>标题</label>
+                <input
+                  type="text"
+                  value={newMemory.title}
+                  onChange={(e) => setNewMemory({ ...newMemory, title: e.target.value })}
+                  placeholder="记忆标题"
+                  className="jelly-input"
+                />
+              </div>
+              
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>内容</label>
+                <textarea
+                  value={newMemory.content}
+                  onChange={(e) => setNewMemory({ ...newMemory, content: e.target.value })}
+                  placeholder="要记住什么..."
+                  rows={4}
+                  style={{
+                    width: '100%', border: '1px solid var(--border-color)', borderRadius: 12,
+                    padding: 12, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6,
+                    background: 'var(--bg-input)', resize: 'none', outline: 'none', fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+              
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>标签</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {allCategories.filter(c => c !== '全部').map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setNewMemory({ ...newMemory, category: cat })}
+                      style={{
+                        padding: '5px 12px', borderRadius: 14, border: 'none', fontSize: 12, cursor: 'pointer',
+                        background: newMemory.category === cat ? 'var(--bg-accent)' : 'var(--glass-bg)',
+                        color: newMemory.category === cat ? 'white' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <button onClick={handleSave} className="jelly-button jelly-button-accent" style={{
+                width: '100%', height: 46, borderRadius: 23, fontSize: 15, fontWeight: 600,
+              }}>
+                {editingMemory ? '保存修改' : '保存'}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ========== 添加分类弹窗 ========== */}
-      {showCatModal && (
-        <div className="modal-mask" onClick={()=>setShowCatModal(false)} style={maskStyle}>
-          <div onClick={e=>e.stopPropagation()} style={modalBoxStyle}>
-            <h3 style={{ margin:0, marginBottom:18, fontSize:17, color:'#4A3B3F' }}>添加新分类</h3>
-            <input
-              value={newCatInput}
-              onChange={e=>setNewCatInput(e.target.value)}
-              placeholder="输入分类名称"
-              style={inputStyle}
-            />
-            <div style={{ display:'flex', gap:12, justifyContent:'flex-end', marginTop:22 }}>
-              <button onClick={()=>setShowCatModal(false)} style={btnCancel}>取消</button>
-              <button onClick={saveNewCategory} style={btnPrimary}>确认添加</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes slideInRight {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOutRight {
-          from { transform: translateX(0); opacity: 1; }
-          to { transform: translateX(100%); opacity: 0; }
-        }
-        @keyframes modalFadeIn {
-          from { opacity:0; transform: scale(0.94); }
-          to { opacity:1; transform: scale(1); }
-        }
-        * {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        *::-webkit-scrollbar {
-          display: none !important;
-        }
-      `}</style>
+        )}
+      </div>
     </div>
   );
 }
-
-// 弹窗样式
-const maskStyle = {
-  position:"absolute",
-  inset:0,
-  background:"rgba(0,0,0,0.35)",
-  display:"flex",
-  alignItems:"center",
-  justifyContent:"center",
-  zIndex:999,
-  animation:"modalFadeIn 0.22s ease-out"
-};
-const modalBoxStyle = {
-  width:"86%",
-  maxWidth:420,
-  background:"#FFFDFB",
-  borderRadius:20,
-  padding:24,
-  boxShadow:"0 6px 22px rgba(140,84,104,0.15)"
-};
-const inputStyle = {
-  width:"100%",
-  boxSizing:"border-box",
-  border:"1px solid #F0D2DC",
-  borderRadius:12,
-  padding:"12px 14px",
-  fontSize:14,
-  background:"#fff",
-  outline:"none"
-};
-const radioLabelStyle = {
-  fontSize: 13,
-  padding: "8px 14px",
-  borderRadius: 999,
-  background: "#FFFDFB",
-  color: "#B98A96",
-  border: "1px solid #F0D2DC",
-  cursor: "pointer",
-  transition: "all 0.2s ease",
-};
-const btnCancel = {
-  padding:"10px 18px",
-  borderRadius:12,
-  border:"1px solid #D8B7BE",
-  background:"transparent",
-  color:"#8C5468",
-  cursor:"pointer",
-  fontSize:14
-};
-const btnPrimary = {
-  padding:"10px 20px",
-  borderRadius:12,
-  border:"none",
-  background:"#F6DDE3",
-  color:"#8C5468",
-  fontWeight:600,
-  cursor:"pointer",
-  fontSize:14
-};
