@@ -10,6 +10,7 @@ import McpView from './components/McpView';
 import SettingsView from './components/SettingsView';
 import Sidebar from './components/Sidebar';
 import WelcomeModal from './components/WelcomeModal';
+import { getSessions, createSession, getSettings } from './api';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('chat');
@@ -18,6 +19,69 @@ export default function App() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const aiName = 'Arden';
   const userName = 'Nana';
+
+  // 全局状态
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // 初始化加载
+  useEffect(() => {
+    initApp();
+  }, []);
+
+  const initApp = async () => {
+    try {
+      // 加载设置
+      const s = await getSettings();
+      setSettings(s);
+
+      // 加载会话列表
+      const list = await getSessions();
+      setSessions(list);
+
+      // 如果没有会话，创建一个
+      if (!list || list.length === 0) {
+        const newSession = await createSession('新对话');
+        setSessions([newSession]);
+        setCurrentSessionId(newSession.id);
+      } else {
+        setCurrentSessionId(list[0].id);
+      }
+    } catch (err) {
+      console.error('初始化失败:', err);
+      // 失败时用本地默认
+      setSettings({
+        model: 'gemini-2.0-flash',
+        system_prompt: '你是 Arden，Nana 的温柔伴侣。',
+        temperature: 0.8,
+        max_tokens: 2000,
+        top_p: 0.9,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 创建新会话
+  const handleCreateSession = async () => {
+    try {
+      const newSession = await createSession('新对话');
+      setSessions(prev => [newSession, ...prev]);
+      setCurrentSessionId(newSession.id);
+      setShowSidebar(false);
+      setCurrentPage('chat');
+    } catch (err) {
+      console.error('创建会话失败:', err);
+    }
+  };
+
+  // 切换会话
+  const handleSelectSession = (sessionId) => {
+    setCurrentSessionId(sessionId);
+    setShowSidebar(false);
+  };
 
   // 检测键盘弹起
   useEffect(() => {
@@ -42,12 +106,31 @@ export default function App() {
   }, []);
 
   const renderPage = () => {
+    if (loading) {
+      return (
+        <div style={{ 
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '100%', color: 'var(--text-muted)', fontSize: 14,
+        }}>
+          加载中...
+        </div>
+      );
+    }
+
     switch (currentPage) {
       case 'home':
         return <HomeView userName={userName} onOpenChat={() => setCurrentPage('chat')} onOpenDiary={(date) => { setCurrentPage('diary'); }} />;
       case 'chat':
-        // 删掉了onOpenMemory和onOpenUsage
-        return <ChatView aiName={aiName} userName={userName} onOpenSidebar={() => setShowSidebar(true)} />;
+        return (
+          <ChatView
+            aiName={aiName}
+            userName={userName}
+            onOpenSidebar={() => setShowSidebar(true)}
+            sessionId={currentSessionId}
+            settings={settings}
+            onUpdateSettings={setSettings}
+          />
+        );
       case 'memory':
         return <MemoryView />;
       case 'diary':
@@ -55,9 +138,18 @@ export default function App() {
       case 'mcp':
         return <McpView />;
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView settings={settings} onUpdateSettings={setSettings} />;
       default:
-        return <ChatView aiName={aiName} userName={userName} onOpenSidebar={() => setShowSidebar(true)} />;
+        return (
+          <ChatView
+            aiName={aiName}
+            userName={userName}
+            onOpenSidebar={() => setShowSidebar(true)}
+            sessionId={currentSessionId}
+            settings={settings}
+            onUpdateSettings={setSettings}
+          />
+        );
     }
   };
 
@@ -86,10 +178,10 @@ export default function App() {
           <Sidebar
             show={showSidebar}
             onClose={() => setShowSidebar(false)}
-            chatList={[]}
-            activeChatId={null}
-            onSelectChat={() => setShowSidebar(false)}
-            onCreateChat={() => setShowSidebar(false)}
+            chatList={sessions}
+            activeChatId={currentSessionId}
+            onSelectChat={handleSelectSession}
+            onCreateChat={handleCreateSession}
             onOpenSettings={() => { setShowSidebar(false); setCurrentPage('settings'); }}
           />
         </div>

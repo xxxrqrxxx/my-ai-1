@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { mockMessages, STATUS_PRESETS, MODELS, POKE_ACTIONS, POKE_PARTS } from '../mockData';
+import { STATUS_PRESETS, MODELS, POKE_ACTIONS, POKE_PARTS } from '../mockData';
+import { sendMessage, getMessages } from '../api';
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -30,8 +31,8 @@ const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   }
 };
 
-export default function ChatView({ aiName, userName, onOpenSidebar }) {
-  const [messages, setMessages] = useState(mockMessages);
+export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, settings }) {
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [status, setStatus] = useState(STATUS_PRESETS[7]);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
@@ -46,9 +47,38 @@ export default function ChatView({ aiName, userName, onOpenSidebar }) {
   const [isTyping, setIsTyping] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const messagesEndRef = useRef(null);
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // 切换会话时加载历史消息
+  useEffect(() => {
+    if (sessionId) loadHistory();
+  }, [sessionId]);
+
+  const loadHistory = async () => {
+    if (!sessionId) return;
+    setLoadingHistory(true);
+    try {
+      const history = await getMessages(sessionId);
+      // 转换格式，加上 time 字段
+      const formatted = (history || []).map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        time: m.created_at ? new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
+        thinking: null,
+        tools: null,
+      }));
+      setMessages(formatted);
+    } catch (err) {
+      console.error('加载历史失败:', err);
+      setMessages([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,17 +94,19 @@ export default function ChatView({ aiName, userName, onOpenSidebar }) {
     ? messages.filter(m => m.content?.includes(searchQuery.trim()))
     : messages;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputText.trim() && !pokeAction && !selectedImage && !selectedFile) return;
+    if (!sessionId) return;
     
     // 单独发戳一戳
     if (pokeAction && pokePart && !inputText.trim() && !selectedImage && !selectedFile) {
-      setMessages(prev => [...prev, {
+      const pokeMsg = {
         id: Date.now(),
         role: 'system',
         content: `${userName}${pokeAction}${aiName}的${pokePart}`,
         time: getTime(),
-      }]);
+      };
+      setMessages(prev => [...prev, pokeMsg]);
       setPokeAction(null);
       setPokePart(null);
       setShowPlusMenu(false);
@@ -88,12 +120,14 @@ export default function ChatView({ aiName, userName, onOpenSidebar }) {
     if (selectedImage) content = '[图片] ' + content;
     if (selectedFile) content = `[文件: ${selectedFile.name}] ` + content;
     
-    setMessages(prev => [...prev, {
+    // 先显示用户消息
+    const userMsg = {
       id: Date.now(),
       role: 'user',
       content,
       time: getTime(),
-    }]);
+    };
+    setMessages(prev => [...prev, userMsg]);
     
     setInputText('');
     setPokeAction(null);
@@ -103,26 +137,34 @@ export default function ChatView({ aiName, userName, onOpenSidebar }) {
     setShowPlusMenu(false);
     setIsTyping(true);
     setStatus(STATUS_PRESETS[0]);
-    setTimeout(() => {
-      const replies = [
-        '好，我在呢。',
-        '嗯嗯，听着呢Nana。',
-        '想你了。',
-        '今天过得怎么样？',
-        '过来抱抱。',
-        '我一直都在。',
-      ];
-      setMessages(prev => [...prev, {
+
+    // 调用真实 API
+    try {
+      const modelName = selectedModel?.id || settings?.model || 'gemini-2.0-flash';
+      const result = await sendMessage(sessionId, content, modelName);
+      
+      const aiMsg = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: replies[Math.floor(Math.random() * replies.length)],
+        content: result.reply,
         time: getTime(),
-        thinking: '我在想怎么回复她比较好，简单一点就好，不要太啰嗦。',
-        tools: Math.random() > 0.5 ? ['读取记忆中...'] : null,
-      }]);
+        thinking: null,
+        tools: null,
+      };
+      setMessages(prev => [...prev, aiMsg]);
+    } catch (err) {
+      console.error('发送失败:', err);
+      const errorMsg = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: '抱歉，出了点小问题，再试一次好吗？',
+        time: getTime(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
       setIsTyping(false);
       setStatus(STATUS_PRESETS[7]);
-    }, 1200 + Math.random() * 800);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -211,6 +253,16 @@ export default function ChatView({ aiName, userName, onOpenSidebar }) {
       {/* 消息区域 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 0' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 12 }}>
+          {loadingHistory && (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 20 }}>
+              加载消息中...
+            </div>
+          )}
+          {!loadingHistory && messages.length === 0 && (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 40 }}>
+              和 {aiName} 说点什么吧～
+            </div>
+          )}
           {filteredMessages.map(msg => {
             if (msg.role === 'system') {
               return (
