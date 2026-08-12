@@ -4,7 +4,6 @@ import { STATUS_PRESETS, chatDates } from '../mockData';
 export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentStatus] = useState(STATUS_PRESETS[7]);
-
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   
@@ -43,6 +42,7 @@ export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
   return (
     <div className="page-container">
       <div className="page-content" style={{ padding: '50px 20px 100px' }}>
+        {/* 顶部名字和状态 */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h1 style={{
             fontSize: 32,
@@ -60,7 +60,9 @@ export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
           </div>
         </div>
         
+        {/* 日历卡片 */}
         <div className="jelly-card" style={{ padding: 18 }}>
+          {/* 月份切换 */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -78,6 +80,7 @@ export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
             </button>
           </div>
           
+          {/* 星期 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
             {weekDays.map(d => (
               <div key={d} style={{
@@ -87,6 +90,7 @@ export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
             ))}
           </div>
           
+          {/* 日期 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
             {days.map((day, i) => (
               <div
@@ -104,8 +108,8 @@ export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
                          hasChat(day) ? 'var(--text-primary)' : 
                          'var(--text-muted)',
                   background: isToday(day) 
-                    ? 'linear-gradient(135deg, var(--bg-accent) 0%, #D8709A 100%)'
-                    : hasChat(day) ? 'var(--bg-accent-light)' : 'transparent',
+                    ? 'var(--accent-gradient)'
+                    : hasChat(day) ? 'var(--accent-lighter)' : 'transparent',
                   fontWeight: isToday(day) || hasChat(day) ? 600 : 400,
                   position: 'relative',
                   transition: 'all 0.15s',
@@ -115,7 +119,7 @@ export default function HomeView({ userName, onOpenChat, onOpenDiary }) {
                 {hasChat(day) && !isToday(day) && (
                   <span style={{
                     position: 'absolute', bottom: 3, width: 3, height: 3,
-                    borderRadius: '50%', background: 'var(--bg-accent)',
+                    borderRadius: '50%', background: 'var(--accent)',
                   }} />
                 )}
               </div>

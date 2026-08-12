@@ -38,15 +38,16 @@ export default function App() {
       meta.name = 'theme-color';
       document.head.appendChild(meta);
     }
-    meta.content = '#FFF0F5';
+    meta.content = '#FFF5F8';
   }, []);
 
   const renderPage = () => {
     switch (currentPage) {
       case 'home':
-        return <HomeView userName={userName} onOpenChat={() => setCurrentPage('chat')} onOpenDiary={() => setCurrentPage('diary')} />;
+        return <HomeView userName={userName} onOpenChat={() => setCurrentPage('chat')} onOpenDiary={(date) => { setCurrentPage('diary'); }} />;
       case 'chat':
-        return <ChatView aiName={aiName} userName={userName} onOpenSidebar={() => setShowSidebar(true)} onOpenMemory={() => setCurrentPage('memory')} onOpenUsage={() => setCurrentPage('settings')} />;
+        // 删掉了onOpenMemory和onOpenUsage
+        return <ChatView aiName={aiName} userName={userName} onOpenSidebar={() => setShowSidebar(true)} />;
       case 'memory':
         return <MemoryView />;
       case 'diary':

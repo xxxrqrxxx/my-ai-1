@@ -66,11 +66,11 @@ export default function BottomNav({ activeTab, onTabChange }) {
   return (
     <div style={{
       position: 'absolute',
-      bottom: 0,
+      bottom: 'calc(10px + var(--safe-bottom))',
       left: 0,
       right: 0,
       zIndex: 100,
-      padding: '8px 12px calc(8px + var(--safe-bottom))',
+      padding: '0 12px',
     }}>
       <div className="jelly-card" style={{
         display: 'flex',
@@ -94,13 +94,13 @@ export default function BottomNav({ activeTab, onTabChange }) {
                 padding: '8px 2px',
                 border: 'none',
                 background: isActive 
-                  ? 'linear-gradient(135deg, var(--bg-accent) 0%, #E08AB0 100%)'
+                  ? 'linear-gradient(135deg, #F5CAD8 0%, #F0BCCC 100%)'
                   : 'transparent',
                 borderRadius: 18,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 transform: isActive ? 'scale(1.02)' : 'scale(1)',
-                boxShadow: isActive ? '0 4px 12px rgba(240, 168, 200, 0.35)' : 'none',
+                boxShadow: isActive ? '0 4px 12px rgba(240, 188, 204, 0.35)' : 'none',
               }}
             >
               <Icon name={tab.name} active={isActive} />

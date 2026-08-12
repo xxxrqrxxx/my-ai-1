@@ -10,8 +10,6 @@ const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>;
     case 'upload':
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
-    case 'check':
-      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
     default: return null;
   }
 };
@@ -20,14 +18,14 @@ const Slider = ({ label, value, min, max, step, unit, onChange }) => (
   <div style={{ marginBottom: 18 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
       <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--bg-accent)' }}>{value}{unit}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{value}{unit}</span>
     </div>
     <input
       type="range"
       min={min} max={max} step={step}
       value={value}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      style={{ width: '100%', accentColor: 'var(--bg-accent)' }}
+      style={{ width: '100%' }}
     />
   </div>
 );
@@ -54,15 +52,6 @@ export default function SettingsView() {
   const [maxTokens, setMaxTokens] = useState(2000);
   const [topP, setTopP] = useState(0.9);
   
-  const [selectedModels, setSelectedModels] = useState({
-    qwen: 'qwen-plus',
-    deepseek: 'deepseek-chat',
-    glm: 'glm-4-flash',
-    doubao: 'doubao-pro-32k',
-    gemini: 'gemini-2.0-flash',
-  });
-  
-  const [expandedModel, setExpandedModel] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -94,7 +83,7 @@ export default function SettingsView() {
                 <div style={{
                   height: '100%', borderRadius: 3,
                   width: `${percent}%`,
-                  background: 'var(--bg-accent)',
+                  background: 'var(--accent-gradient)',
                   transition: 'width 0.3s',
                 }} />
               </div>
@@ -135,10 +124,12 @@ export default function SettingsView() {
           value={systemPrompt}
           onChange={(e) => setSystemPrompt(e.target.value)}
           rows={5}
+          className="jelly-input"
           style={{
-            width: '100%', border: '1px solid var(--border-color)', borderRadius: 12,
+            width: '100%', borderRadius: 12,
             padding: 12, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6,
-            background: 'var(--bg-input)', resize: 'none', outline: 'none', fontFamily: 'inherit',
+            resize: 'none', outline: 'none', fontFamily: 'inherit',
+            boxSizing: 'border-box',
           }}
         />
       </div>
@@ -147,88 +138,6 @@ export default function SettingsView() {
         <Slider label="Temperature" value={temperature} min={0} max={2} step={0.1} unit="" onChange={setTemperature} />
         <Slider label="Max tokens" value={maxTokens} min={512} max={8192} step={128} unit="" onChange={setMaxTokens} />
         <Slider label="Top-p" value={topP} min={0} max={1} step={0.05} unit="" onChange={setTopP} />
-      </div>
-    </div>
-  );
-
-  const renderDefaultPage = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => setPage('main')} className="jelly-button" style={{ width: 36, height: 36 }}>
-          <Icon name="chevron-left" size={18} />
-        </button>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>默认设置</h2>
-      </div>
-      
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {MODELS.map(model => {
-          const isExpanded = expandedModel === model.id;
-          const selected = selectedModels[model.id];
-          return (
-            <div key={model.id} className="jelly-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div
-                onClick={() => setExpandedModel(isExpanded ? null : model.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: 16, cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 8, height: 8, borderRadius: 2,
-                    background: 'var(--bg-accent)',
-                  }} />
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{model.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selected}</div>
-                  </div>
-                </div>
-                <div style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                  <Icon name="chevron-right" size={16} />
-                </div>
-              </div>
-              
-              {isExpanded && (
-                <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-color)' }}>
-                  {model.models.map(m => (
-                    <div
-                      key={m}
-                      onClick={() => {
-                        setSelectedModels(prev => ({ ...prev, [model.id]: m }));
-                        setExpandedModel(null);
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '12px 0', cursor: 'pointer',
-                      }}
-                    >
-                      <span style={{ fontSize: 14, color: selected === m ? 'var(--bg-accent)' : 'var(--text-secondary)' }}>
-                        {m}
-                      </span>
-                      {selected === m && <Icon name="check" size={18} color="var(--bg-accent)" />}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const renderMemoryPage = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => setPage('main')} className="jelly-button" style={{ width: 36, height: 36 }}>
-          <Icon name="chevron-left" size={18} />
-        </button>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>记忆设置</h2>
-      </div>
-      
-      <div className="jelly-card" style={{ padding: '8px 16px' }}>
-        <Slider label="压缩阈值" value={6000} min={2000} max={20000} step={500} unit=" tokens" onChange={() => {}} />
-        <Slider label="保留轮数" value={6} min={2} max={20} step={1} unit=" 轮" onChange={() => {}} />
       </div>
     </div>
   );
@@ -246,12 +155,12 @@ export default function SettingsView() {
         onClick={() => fileInputRef.current?.click()}
         className="jelly-card"
         style={{
-          width: '100%', padding: 40, border: '2px dashed var(--border-color)',
+          width: '100%', padding: 40, border: '2px dashed var(--glass-border)',
           background: 'transparent', cursor: 'pointer',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
         }}
       >
-        <Icon name="upload" size={36} color="var(--bg-accent)" />
+        <Icon name="upload" size={36} color="var(--accent)" />
         <span style={{ fontSize: 15, color: 'var(--text-secondary)' }}>点击上传 docx / txt 文件</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Arden 可以读取这些文件作为参考</span>
       </button>
@@ -261,10 +170,17 @@ export default function SettingsView() {
 
   const renderMainPage = () => (
     <div>
-      <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 24 }}>
-        Settings
-      </h1>
+      {/* 标题 + 副标题移到这里 */}
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+          Settings
+        </h1>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
+          和 Arden 的专属小窝
+        </p>
+      </div>
       
+      {/* 第一组：通用设置、字体选择、深色模式（同一级） */}
       <div className="jelly-card" style={{ padding: '4px 16px', marginBottom: 14 }}>
         <ListItem label="通用设置" onClick={() => setPage('general')} />
         <ListItem
@@ -284,17 +200,14 @@ export default function SettingsView() {
         />
       </div>
       
+      {/* 第二组：文件添加、用量统计（删掉了默认设置和记忆设置） */}
       <div className="jelly-card" style={{ padding: '4px 16px' }}>
-        <ListItem label="默认设置" onClick={() => setPage('default')} />
-        <ListItem label="记忆设置" onClick={() => setPage('memory')} />
         <ListItem label="文件添加" onClick={() => setPage('files')} />
         <ListItem label="用量统计" onClick={() => setPage('usage')} />
       </div>
       
-      <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginTop: 30, fontWeight: 500 }}>
-        和 Arden 的专属小窝
-      </p>
-      <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 6, opacity: 0.7 }}>
+      {/* 底部版本号 */}
+      <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 30, opacity: 0.7 }}>
         Arden's Home · v0.2
       </p>
     </div>
@@ -305,8 +218,6 @@ export default function SettingsView() {
       <div className="page-content" style={{ padding: '50px 16px 100px' }}>
         {page === 'main' && renderMainPage()}
         {page === 'general' && renderGeneralPage()}
-        {page === 'default' && renderDefaultPage()}
-        {page === 'memory' && renderMemoryPage()}
         {page === 'files' && renderFilesPage()}
         {page === 'usage' && renderUsagePage()}
       </div>

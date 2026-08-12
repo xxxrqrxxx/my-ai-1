@@ -47,13 +47,13 @@ export default function McpView() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{
                       fontSize: 12,
-                      color: server.connected ? 'var(--bg-accent)' : 'var(--text-muted)',
+                      color: server.connected ? 'var(--accent)' : 'var(--text-muted)',
                       fontWeight: server.connected ? 600 : 400,
                       display: 'flex', alignItems: 'center', gap: 4,
                     }}>
                       <span style={{
                         width: 6, height: 6, borderRadius: '50%',
-                        background: server.connected ? 'var(--bg-accent)' : 'var(--text-muted)',
+                        background: server.connected ? 'var(--accent)' : 'var(--text-muted)',
                       }} />
                       {server.connected ? '已连接' : '未连接'}
                     </span>
