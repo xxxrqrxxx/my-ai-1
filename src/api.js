@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // 本地开发用 localhost，部署上线后改回 Render 地址
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'https://my-ai-2-kwhk.onrender.com';
 
 export const api = axios.create({
     baseURL: BASE_URL,
