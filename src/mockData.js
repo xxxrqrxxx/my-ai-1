@@ -1,4 +1,5 @@
 // 模拟数据
+
 export const STATUS_PRESETS = [
   { en: 'Thinking', zh: '思考中' },
   { en: 'Remembering', zh: '回忆中' },
@@ -17,8 +18,8 @@ export const STATUS_PRESETS = [
 // 只保留Gemini系列模型
 export const MODELS = [
   {
-    id: 'gemini', name: 'Gemini', defaultModel: 'gemini-2.0-flash', color: '#8B5CF6',
-    models: ['gemini-2.0-flash', 'gemini-2.0-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    id: 'gemini', name: 'Gemini', defaultModel: 'gemini-1.5-flash', color: '#8B5CF6',
+    models: ['gemini-1.5-flash', 'gemini-1.5-pro'],
   },
 ];
 
@@ -201,7 +202,7 @@ export const defaultSettings = {
   topP: 0.9,
   darkMode: false,
   fontFamily: '',
-  defaultModel: 'gemini-2.0-flash',
+  defaultModel: 'gemini-1.5-flash',
 };
 
 export const chatDates = [
