@@ -45,3 +45,9 @@ export const getMindIntent = () => api.get('/api/mind/intent').then(r => r.data)
 export const getActivitySummary = () => api.get('/api/activity/summary').then(r => r.data);
 
 export const getUsage = () => api.get('/api/usage').then(r => r.data);
+
+// MCP 服务器
+export const getMcpServers = () => api.get('/api/mcp').then(r => r.data);
+export const toggleMcpServer = (id) => api.patch(`/api/mcp/${id}/toggle`).then(r => r.data);
+export const addMcpServer = (data) => api.post('/api/mcp', data).then(r => r.data);
+export const deleteMcpServer = (id) => api.delete(`/api/mcp/${id}`).then(r => r.data);

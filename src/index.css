@@ -8,8 +8,8 @@
   --color-accent: #c9a0b4;     /* 降低饱和度，淡紫粉，参考欢迎页 */
   --color-accent-soft: #f8e7ee;
 
-  --color-text-deep: #7a5c6c;  /* 文字改为柔和灰紫色，不要深紫红 */
-  --color-text-muted: #b094a2;
+  --color-text-deep: #e0bcd0;  /* 文字改为柔和灰紫色，不要深紫红 */
+  --color-text-muted: #ede0e7;
 
   --radius-card: 20px;
   --radius-btn-input: 14px;

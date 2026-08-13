@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { STATUS_PRESETS, MODELS, POKE_ACTIONS, POKE_PARTS } from '../mockData';
+import { STATUS_WORDS, getRandomStatus } from '../statusWords';
+import { POKE_ACTIONS, POKE_PARTS } from '../mockData';
 import { sendMessage, getMessages } from '../api';
+
+const CLAUDE_MODEL = { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', defaultModel: 'claude-sonnet-4-6' };
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -35,12 +38,10 @@ const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   }
 };
 
-// ===== 改动1：加这个清洗函数，刷新后去掉消息里的文件代码 =====
 function cleanMessageContent(content) {
   if (!content) return content;
   let cleaned = content.replace(/\[文件:[^\]]*\][\s\S]*?\[文件结束\]\s*/g, '');
   cleaned = cleaned.replace(/\[用户上传了文件：[^\]]*\][\s\S]*?----- 文件内容结束 -----\s*/g, '');
-  // 去掉二进制文件前缀（PDF/docx等）
   cleaned = cleaned.replace(/^\[用户上传了文件：[^\]]*（二进制文件，无法直接读取内容）\]\s*/, '');
   cleaned = cleaned.replace(/^\[图片\]\s*/, '');
   return cleaned.trim();
@@ -125,19 +126,19 @@ const FilePreviewModal = ({ file, onClose }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+    <div className="modal-overlay" onClick={onClose} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        width: '100%', maxWidth: 500, maxHeight: '82vh',
+        width: '100%', maxWidth: 500, height: '50vh',
         background: 'var(--bg-primary)', borderRadius: '24px 24px 0 0',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
           <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--text-muted)', opacity: 0.3 }} />
         </div>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '8px 16px 12px', borderBottom: '1px solid var(--glass-border)',
+          padding: '8px 16px 12px', borderBottom: '1px solid var(--glass-border)', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
             <div style={{
@@ -168,10 +169,10 @@ const FilePreviewModal = ({ file, onClose }) => {
         </div>
         <div style={{ flex: 1, overflow: 'auto', background: 'white' }}>
           {isHtml && file.content && (
-            <iframe srcDoc={file.content} style={{ width: '100%', height: '100%', border: 'none', minHeight: 500 }} sandbox="allow-scripts allow-same-origin allow-forms" />
+            <iframe srcDoc={file.content} style={{ width: '100%', height: '100%', border: 'none', minHeight: 300 }} sandbox="allow-scripts allow-same-origin allow-forms" />
           )}
-                    {isPdf && file.dataUrl && (
-            <iframe src={file.dataUrl} style={{ width: '100%', height: '100%', border: 'none', minHeight: 500 }} />
+          {isPdf && file.dataUrl && (
+            <iframe src={file.dataUrl} style={{ width: '100%', height: '100%', border: 'none', minHeight: 300 }} />
           )}
           {isPdf && !file.dataUrl && (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
@@ -213,7 +214,7 @@ const HtmlPreview = ({ html }) => {
       </div>
       {expanded ? (
         <div style={{ position: 'relative' }}>
-          <iframe srcDoc={html} style={{ width: '100%', height: 420, border: 'none', background: 'white', display: 'block' }} sandbox="allow-scripts allow-same-origin allow-forms" />
+          <iframe srcDoc={html} style={{ width: '100%', height: 300, border: 'none', background: 'white', display: 'block' }} sandbox="allow-scripts allow-same-origin allow-forms" />
           <button onClick={() => setExpanded(false)} style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, background: 'rgba(0,0,0,0.4)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="x" size={14} color="white" />
           </button>
@@ -243,14 +244,13 @@ const extractHtmlBlocks = (content) => {
 export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, settings }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [status, setStatus] = useState(STATUS_PRESETS[7]);
+  const [status, setStatus] = useState(getRandomStatus());
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showPokePanel, setShowPokePanel] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedModel, setSelectedModel] = useState(MODELS[0]);
-  const [thinkingId, setThinkingId] = useState(null);
+  const [selectedModel] = useState(CLAUDE_MODEL);
   const [pokeAction, setPokeAction] = useState(null);
   const [pokePart, setPokePart] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
@@ -273,10 +273,9 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
       const formatted = (history || []).map(m => ({
         id: m.id,
         role: m.role,
-        // ===== 改动2：用清洗函数，刷新后不显示文件代码 =====
         content: cleanMessageContent(m.content),
         time: m.created_at ? new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
-        thinking: null,
+        tokens: m.tokens || 0,
         tools: null,
         image: m.file_data?.image || null,
         file: m.file_data?.file || null,
@@ -301,7 +300,7 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     if (!sessionId) return;
 
     if (pokeAction && pokePart && !inputText.trim() && !selectedImage && !selectedFile) {
-      const pokeMsg = { id: Date.now(), role: 'system', content: `${userName}${pokeAction}${aiName}的${pokePart}`, time: getTime() };
+      const pokeMsg = { id: Date.now(), role: 'system', content: `${userName}${pokeAction}${aiName}的${pokePart}`, time: getTime(), tokens: 0 };
       setMessages(prev => [...prev, pokeMsg]);
       setPokeAction(null); setPokePart(null); setShowPlusMenu(false);
       return;
@@ -310,7 +309,6 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     let displayContent = inputText;
     if (pokeAction && pokePart) displayContent = `[${pokeAction}了${pokePart}] ${inputText}`.trim();
 
-    // ===== 改动3：发给AI的格式改清楚，让AI直接读内容 =====
     let sendContent = displayContent;
     if (selectedImage) sendContent = '[图片] ' + sendContent;
     if (selectedFile?.content) {
@@ -325,14 +323,13 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         name: selectedFile.name,
         type: selectedFile.type,
         content: selectedFile.content || null,
-        // PDF 的 dataUrl 不存，太大导致请求失败
         dataUrl: selectedFile.type === 'pdf' ? null : (selectedFile.dataUrl || null),
       } : null,
     };
 
-
+    const userTokens = Math.ceil(sendContent.length / 2);
     const userMsg = {
-      id: Date.now(), role: 'user', content: displayContent, time: getTime(),
+      id: Date.now(), role: 'user', content: displayContent, time: getTime(), tokens: userTokens,
       file: selectedFile ? { ...selectedFile } : null,
       image: selectedImage ? selectedImage.dataUrl : null,
     };
@@ -340,19 +337,21 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
 
     setInputText(''); setPokeAction(null); setPokePart(null);
     setSelectedImage(null); setSelectedFile(null); setShowPlusMenu(false);
-    setIsTyping(true); setStatus(STATUS_PRESETS[0]);
+    setIsTyping(true); setStatus(getRandomStatus());
 
     try {
-      const modelName = selectedModel?.id || settings?.model || 'gemini-2.0-flash';
+      const modelName = selectedModel?.id || settings?.model || 'claude-sonnet-4-6';
       const result = await sendMessage(sessionId, sendContent, modelName, fileData);
-      const aiMsg = { id: Date.now() + 1, role: 'assistant', content: result.reply, time: getTime(), thinking: null, tools: null, image: null, file: null };
+      const aiTokens = result.tokens || Math.ceil(result.reply.length / 2);
+      const aiMsg = { id: Date.now() + 1, role: 'assistant', content: result.reply, time: getTime(), tokens: aiTokens, tools: null, image: null, file: null };
       setMessages(prev => [...prev, aiMsg]);
+      setStatus(getRandomStatus());
     } catch (err) {
       console.error('发送失败:', err);
-      const errorMsg = { id: Date.now() + 1, role: 'assistant', content: '抱歉，出了点小问题，再试一次好吗？', time: getTime() };
+      const errorMsg = { id: Date.now() + 1, role: 'assistant', content: '抱歉，出了点小问题，再试一次好吗？', time: getTime(), tokens: 0 };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
-      setIsTyping(false); setStatus(STATUS_PRESETS[7]);
+      setIsTyping(false);
     }
   };
 
@@ -420,13 +419,6 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
             );
             return (
               <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', width: '100%' }}>
-                {msg.role === 'assistant' && msg.thinking && (
-                  <div className="thinking-chain" onClick={() => setThinkingId(msg.id)}>
-                    <span className="thinking-chain-icon" />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{msg.thinking}</span>
-                    <Icon name="chevron" size={12} />
-                  </div>
-                )}
                 {msg.tools && (
                   <div style={{ display: 'flex', gap: 4, marginBottom: 4, paddingLeft: 4 }}>
                     {msg.tools.map((t, i) => <span key={i} className="tag" style={{ fontSize: 10, padding: '2px 8px' }}>{t}</span>)}
@@ -443,7 +435,9 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
                   {msg.file && <FileCard file={msg.file} isUser={true} onClick={() => setPreviewFile(msg.file)} />}
                   {msg.content && <div className="bubble-user" style={{ padding: '12px 16px', fontSize: 15, lineHeight: 1.6, maxWidth: '80%', whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderRadius: 20 }}>{msg.content}</div>}
                 </>)}
-                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, padding: '0 6px' }}>{msg.time}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, padding: '0 6px' }}>
+                  {msg.time}{msg.tokens > 0 && ` · ${msg.tokens} tokens`}
+                </span>
               </div>
             );
           })}
@@ -456,8 +450,8 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         </div>
       </div>
 
-      <div style={{ flexShrink: 0, padding: '8px 12px calc(92px + var(--safe-bottom))', background: 'linear-gradient(to top, var(--bg-primary) 80%, transparent)' }}>
-        <div className="status-bar" style={{ marginBottom: 6 }}><span className="status-item"><span className="status-dot" />{status.zh}</span></div>
+      <div style={{ flexShrink: 0, padding: '8px 12px calc(92px + var(--safe-bottom))' }}>
+        <div className="status-bar" style={{ marginBottom: 6 }}><span className="status-item"><span className="status-dot" />{status}</span></div>
         {(selectedImage || selectedFile) && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6, gap: 8 }}>
             {selectedImage && (
@@ -506,58 +500,53 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
       </div>
 
       {previewImage && (
-        <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
           <img src={previewImage} style={{ maxWidth: '92%', maxHeight: '88%', borderRadius: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} />
         </div>
       )}
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
-      {thinkingId && (
-        <div className="modal-overlay" onClick={() => setThinkingId(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, marginTop: 8 }}>Thought process</h3>
-            <p style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--text-secondary)' }}>{messages.find(m => m.id === thinkingId)?.thinking}</p>
-            <button onClick={() => setThinkingId(null)} className="jelly-button jelly-button-accent" style={{ width: '100%', height: 44, marginTop: 18, borderRadius: 22, fontSize: 15 }}>知道了</button>
-          </div>
-        </div>
-      )}
+
       {showPokePanel && (
-        <div className="modal-overlay" onClick={() => setShowPokePanel(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 18, marginTop: 8 }}>戳一戳</h3>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>动作</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {POKE_ACTIONS.map(action => (
-                  <button key={action} onClick={() => setPokeAction(action)} className="jelly-button" style={{ width: 'auto', height: 34, padding: '0 14px', borderRadius: 17, fontSize: 13, background: pokeAction === action ? 'var(--accent-gradient)' : 'var(--glass-bg)', color: pokeAction === action ? 'white' : 'var(--text-secondary)' }}>{action}</button>
-                ))}
+        <div className="modal-overlay" onClick={() => setShowPokePanel(false)} style={{ zIndex: 2000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ height: '50vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 18, marginTop: 8, flexShrink: 0 }}>戳一戳</h3>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>动作</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {POKE_ACTIONS.map(action => (
+                    <button key={action} onClick={() => setPokeAction(action)} className="jelly-button" style={{ width: 'auto', height: 34, padding: '0 14px', borderRadius: 17, fontSize: 13, background: pokeAction === action ? 'var(--accent-gradient)' : 'var(--glass-bg)', color: pokeAction === action ? 'white' : 'var(--text-secondary)' }}>{action}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>落在哪</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {POKE_PARTS.map(part => (
+                    <button key={part} onClick={() => setPokePart(part)} className="jelly-button" style={{ width: 'auto', height: 34, padding: '0 14px', borderRadius: 17, fontSize: 13, background: pokePart === part ? 'var(--accent-gradient)' : 'var(--glass-bg)', color: pokePart === part ? 'white' : 'var(--text-secondary)' }}>{part}</button>
+                  ))}
+                </div>
               </div>
             </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>落在哪</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {POKE_PARTS.map(part => (
-                  <button key={part} onClick={() => setPokePart(part)} className="jelly-button" style={{ width: 'auto', height: 34, padding: '0 14px', borderRadius: 17, fontSize: 13, background: pokePart === part ? 'var(--accent-gradient)' : 'var(--glass-bg)', color: pokePart === part ? 'white' : 'var(--text-secondary)' }}>{part}</button>
-                ))}
-              </div>
-            </div>
-            <button onClick={confirmPoke} className="jelly-button jelly-button-accent" style={{ width: '100%', height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>就这一下</button>
+            <button onClick={confirmPoke} className="jelly-button jelly-button-accent" style={{ width: '100%', height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600, flexShrink: 0 }}>就这一下</button>
           </div>
         </div>
       )}
+
       {showModelPicker && (
-        <div className="modal-overlay" onClick={() => setShowModelPicker(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 16, marginTop: 8 }}>选择模型</h3>
-            {MODELS.map(model => (
-              <div key={model.id} onClick={() => { setSelectedModel(model); setShowModelPicker(false); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, cursor: 'pointer', marginBottom: 6, background: selectedModel.id === model.id ? 'var(--accent-lighter)' : 'transparent' }}>
+        <div className="modal-overlay" onClick={() => setShowModelPicker(false)} style={{ zIndex: 2000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ height: '50vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 16, marginTop: 8, flexShrink: 0 }}>选择模型</h3>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, background: 'var(--accent-lighter)' }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="api" size={18} color="var(--accent)" /></div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{model.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{model.defaultModel}</div>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Claude Sonnet 4.6</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>claude-sonnet-4-6</div>
                 </div>
-                {selectedModel.id === model.id && <Icon name="check" size={18} color="var(--accent)" />}
+                <Icon name="check" size={18} color="var(--accent)" />
               </div>
-            ))}
+            </div>
           </div>
         </div>
       )}

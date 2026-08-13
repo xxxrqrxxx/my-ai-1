@@ -10,7 +10,9 @@ import McpView from './components/McpView';
 import SettingsView from './components/SettingsView';
 import Sidebar from './components/Sidebar';
 import WelcomeModal from './components/WelcomeModal';
-import { getSessions, createSession, getSettings } from './api';
+import { getSessions, createSession, getSettings, deleteSession } from './api';
+import WhisperView from './components/WhisperView';
+import LetterView from './components/LetterView';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('chat');
@@ -20,28 +22,21 @@ export default function App() {
   const aiName = 'Arden';
   const userName = 'Nana';
 
-  // 全局状态
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 初始化加载
   useEffect(() => {
     initApp();
   }, []);
 
   const initApp = async () => {
     try {
-      // 加载设置
       const s = await getSettings();
       setSettings(s);
-
-      // 加载会话列表
       const list = await getSessions();
       setSessions(list);
-
-      // 如果没有会话，创建一个
       if (!list || list.length === 0) {
         const newSession = await createSession('新对话');
         setSessions([newSession]);
@@ -51,7 +46,6 @@ export default function App() {
       }
     } catch (err) {
       console.error('初始化失败:', err);
-      // 失败时用本地默认
       setSettings({
         model: 'gemini-2.0-flash',
         system_prompt: '你是 Arden，Nana 的温柔伴侣。',
@@ -64,7 +58,6 @@ export default function App() {
     }
   };
 
-  // 创建新会话
   const handleCreateSession = async () => {
     try {
       const newSession = await createSession('新对话');
@@ -77,13 +70,31 @@ export default function App() {
     }
   };
 
-  // 切换会话
   const handleSelectSession = (sessionId) => {
     setCurrentSessionId(sessionId);
     setShowSidebar(false);
   };
 
-  // 检测键盘弹起
+  const handleDeleteSession = async (sessionId) => {
+    if (!window.confirm('确定要删除这个对话吗？')) return;
+    try {
+      await deleteSession(sessionId);
+      const remaining = sessions.filter(s => s.id !== sessionId);
+      setSessions(remaining);
+      if (currentSessionId === sessionId) {
+        if (remaining.length > 0) {
+          setCurrentSessionId(remaining[0].id);
+        } else {
+          const newSession = await createSession('新对话');
+          setSessions([newSession]);
+          setCurrentSessionId(newSession.id);
+        }
+      }
+    } catch (err) {
+      console.error('删除会话失败:', err);
+    }
+  };
+
   useEffect(() => {
     if (!window.visualViewport) return;
     const handleResize = () => {
@@ -94,7 +105,6 @@ export default function App() {
     return () => window.visualViewport.removeEventListener('resize', handleResize);
   }, []);
 
-  // 设置浏览器主题色
   useEffect(() => {
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
@@ -119,7 +129,15 @@ export default function App() {
 
     switch (currentPage) {
       case 'home':
-        return <HomeView userName={userName} onOpenChat={() => setCurrentPage('chat')} onOpenDiary={(date) => { setCurrentPage('diary'); }} />;
+        return (
+          <HomeView
+            userName={userName}
+            onOpenChat={() => setCurrentPage('chat')}
+            onOpenDiary={() => setCurrentPage('diary')}
+            onOpenWhisper={() => setCurrentPage('whisper')}
+            onOpenLetter={() => setCurrentPage('letter')}
+          />
+        );
       case 'chat':
         return (
           <ChatView
@@ -139,6 +157,11 @@ export default function App() {
         return <McpView />;
       case 'settings':
         return <SettingsView settings={settings} onUpdateSettings={setSettings} />;
+      case 'whisper':
+        return <WhisperView onBack={() => setCurrentPage('home')} />;
+      case 'letter':
+        return <LetterView onBack={() => setCurrentPage('home')} />;
+
       default:
         return (
           <ChatView
@@ -162,7 +185,9 @@ export default function App() {
       background: 'linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%)',
     }}>
       <FloatingHearts />
-      {renderPage()}
+      <div style={{ height: '100%' }}>
+        {renderPage()}
+      </div>
       
       {!keyboardOpen && (
         <BottomNav activeTab={currentPage} onTabChange={setCurrentPage} />
@@ -182,7 +207,7 @@ export default function App() {
             activeChatId={currentSessionId}
             onSelectChat={handleSelectSession}
             onCreateChat={handleCreateSession}
-            onOpenSettings={() => { setShowSidebar(false); setCurrentPage('settings'); }}
+            onDeleteChat={handleDeleteSession}
           />
         </div>
       )}

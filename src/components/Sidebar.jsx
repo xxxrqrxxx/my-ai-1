@@ -5,15 +5,13 @@ const Icon = ({ name, size = 18, color = 'var(--text-secondary)' }) => {
   switch(name) {
     case 'plus':
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-    case 'settings':
-      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
-    case 'chevron-right':
-      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>;
+    case 'trash':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
     default: return null;
   }
 };
 
-export default function Sidebar({ show, onClose, chatList, activeChatId, onSelectChat, onCreateChat, onOpenSettings }) {
+export default function Sidebar({ show, onClose, chatList, activeChatId, onSelectChat, onCreateChat, onDeleteChat }) {
   return (
     <div style={{
       position: 'absolute',
@@ -64,8 +62,8 @@ export default function Sidebar({ show, onClose, chatList, activeChatId, onSelec
         </button>
       </div>
       
-      {/* 对话列表 */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px' }}>
+      {/* 对话列表 - 立体卡片式 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 16px' }}>
         {chatList.length === 0 ? (
           <div style={{
             textAlign: 'center',
@@ -81,47 +79,50 @@ export default function Sidebar({ show, onClose, chatList, activeChatId, onSelec
               key={chat.id}
               onClick={() => onSelectChat(chat.id)}
               style={{
-                padding: '12px 14px',
-                borderRadius: 14,
-                marginBottom: 4,
+                position: 'relative',
+                padding: '14px 40px 14px 16px',
+                borderRadius: 16,
+                marginBottom: 10,
                 cursor: 'pointer',
-                background: activeChatId === chat.id ? 'var(--accent-lighter)' : 'transparent',
-                transition: 'background 0.15s',
+                background: activeChatId === chat.id ? 'var(--accent-lighter)' : 'var(--glass-bg)',
+                backdropFilter: 'blur(20px)',
+                border: `1px solid ${activeChatId === chat.id ? 'var(--accent)' : 'var(--glass-border)'}`,
+                boxShadow: activeChatId === chat.id ? 'var(--shadow-accent)' : 'var(--shadow)',
+                transition: 'all 0.15s',
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 3 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {chat.title}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {chat.lastMessage || '暂无消息'}
               </div>
+              {onDeleteChat && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteChat(chat.id); }}
+                  style={{
+                    position: 'absolute',
+                    right: 10,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    border: 'none',
+                    background: 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    opacity: 0.6,
+                  }}
+                >
+                  <Icon name="trash" size={15} color="var(--text-muted)" />
+                </button>
+              )}
             </div>
           ))
         )}
-      </div>
-      
-      {/* 底部设置入口 */}
-      <div style={{
-        padding: '12px 12px calc(16px + env(safe-area-inset-bottom))',
-        borderTop: '1px solid var(--glass-border)',
-      }}>
-        <button onClick={onOpenSettings} style={{
-          width: '100%',
-          padding: '12px 14px',
-          borderRadius: 14,
-          border: 'none',
-          background: 'transparent',
-          color: 'var(--text-secondary)',
-          fontSize: 14,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          cursor: 'pointer',
-        }}>
-          <Icon name="settings" size={18} />
-          设置
-          <Icon name="chevron-right" size={14} style={{ marginLeft: 'auto' }} />
-        </button>
       </div>
     </div>
   );

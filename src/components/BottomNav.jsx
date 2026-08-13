@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Icon = ({ name, active }) => {
   const color = active ? 'white' : 'var(--text-secondary)';
@@ -63,6 +63,19 @@ const TABS = [
 ];
 
 export default function BottomNav({ activeTab, onTabChange }) {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    const checkModal = () => {
+      const hasModal = document.querySelector('.modal-overlay');
+      setHidden(!!hasModal);
+    };
+    const observer = new MutationObserver(checkModal);
+    observer.observe(document.body, { childList: true, subtree: true });
+    checkModal();
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div style={{
       position: 'absolute',
@@ -71,6 +84,9 @@ export default function BottomNav({ activeTab, onTabChange }) {
       right: 0,
       zIndex: 100,
       padding: '0 12px',
+      opacity: hidden ? 0 : 1,
+      pointerEvents: hidden ? 'none' : 'auto',
+      transition: 'opacity 0.2s ease',
     }}>
       <div className="jelly-card" style={{
         display: 'flex',

@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, updateSettings, getUsage, getMemories, createMemory, deleteMemory } from '../api';
 
-const GEMINI_MODELS = [
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
-  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite' },
-  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
-];
+const CLAUDE_MODEL = { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' };
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -53,39 +49,85 @@ const ListItem = ({ label, right, onClick }) => (
   </div>
 );
 
+// 环形图组件 - 统一粉色系
+const DonutChart = ({ data, size = 160 }) => {
+  const total = data.reduce((sum, item) => sum + (item.used || 0), 0);
+  const radius = size / 2 - 20;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  
+  // 统一粉色系，从深到浅
+  const pinkColors = ['#F4B5C5', '#F7C4D0', '#F9D1DB', '#FBDDE6', '#FDE9EF'];
+  
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {/* 背景环 */}
+        <circle
+          cx={size / 2} cy={size / 2} r={radius}
+          fill="none" stroke="var(--glass-bg)" strokeWidth={16}
+        />
+        {total > 0 && data.map((item, i) => {
+          const percent = item.used / total;
+          const dash = percent * circumference;
+          const circle = (
+            <circle
+              key={item.modelId || i}
+              cx={size / 2} cy={size / 2} r={radius}
+              fill="none"
+              stroke={pinkColors[i % pinkColors.length]}
+              strokeWidth={16}
+              strokeDasharray={`${dash} ${circumference - dash}`}
+              strokeDashoffset={-offset}
+              strokeLinecap="butt"
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+          );
+          offset += dash;
+          return circle;
+        })}
+      </svg>
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>总用量</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>
+          {total >= 1000 ? (total / 1000).toFixed(1) + 'k' : total}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function SettingsView() {
   const [page, setPage] = useState('main');
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // 设置
   const [systemPrompt, setSystemPrompt] = useState('');
   const [temperature, setTemperature] = useState(0.8);
   const [maxTokens, setMaxTokens] = useState(2000);
   const [topP, setTopP] = useState(0.9);
-  const [model, setModel] = useState('gemini-3.5-flash');
+  const [model, setModel] = useState(CLAUDE_MODEL.id);
   
-  // 字体
   const [customFontName, setCustomFontName] = useState('');
   const fontInputRef = useRef(null);
   
-  // 参考文件（世界书）
   const [referenceFiles, setReferenceFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const fileInputRef = useRef(null);
   
-  // 用量统计
   const [usageData, setUsageData] = useState(null);
   
   const saveTimerRef = useRef(null);
 
-  // 加载设置
   useEffect(() => {
     loadSettings();
   }, []);
 
-  // 启动时加载自定义字体
   useEffect(() => {
     const savedFont = localStorage.getItem('custom_font');
     const savedFontName = localStorage.getItem('custom_font_name');
@@ -95,12 +137,10 @@ export default function SettingsView() {
     }
   }, []);
 
-  // 进入文件页面时加载参考文件
   useEffect(() => {
     if (page === 'files') loadReferenceFiles();
   }, [page]);
 
-  // 进入用量页面时加载统计
   useEffect(() => {
     if (page === 'usage') {
       getUsage().then(data => setUsageData(data)).catch(() => setUsageData(null));
@@ -114,7 +154,7 @@ export default function SettingsView() {
       setTemperature(data.temperature ?? 0.8);
       setMaxTokens(data.max_tokens ?? 2000);
       setTopP(data.top_p ?? 0.9);
-      setModel(data.model || 'gemini-3.5-flash');
+      setModel(data.model || CLAUDE_MODEL.id);
     } catch (error) {
       console.error('加载设置失败:', error);
     } finally {
@@ -136,7 +176,6 @@ export default function SettingsView() {
     }, 1000);
   };
 
-  // 字体相关
   const applyCustomFont = (fontData) => {
     const oldStyle = document.getElementById('custom-font-style');
     if (oldStyle) oldStyle.remove();
@@ -179,7 +218,6 @@ export default function SettingsView() {
     setCustomFontName('');
   };
 
-  // 参考文件相关
   const loadReferenceFiles = async () => {
     setLoadingFiles(true);
     try {
@@ -233,67 +271,103 @@ export default function SettingsView() {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
-  // 用量统计页面
-  const renderUsagePage = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => setPage('main')} className="jelly-button" style={{ width: 36, height: 36 }}>
-          <Icon name="chevron-left" size={18} />
-        </button>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>用量统计</h2>
-      </div>
-      
-      {!usageData ? (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>加载中...</div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {usageData.models.map(item => {
-              const percent = Math.min(100, (item.used / item.total) * 100);
-              return (
-                <div key={item.modelId} className="jelly-card" style={{ padding: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{item.name}</span>
-                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                      {item.used.toLocaleString()} / {item.total.toLocaleString()} tokens
-                    </span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 3, background: 'var(--glass-bg)', overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: 3,
-                      width: `${percent}%`,
-                      background: 'var(--accent-gradient)',
-                      transition: 'width 0.3s',
-                    }} />
-                  </div>
+  // 用量统计页面 - 带环形图
+  const renderUsagePage = () => {
+    const models = usageData?.models || [];
+    const total = usageData?.total || 0;
+    const today = usageData?.today || 0;
+    const donutColors = ['#F4B5C5', '#F7C4D0', '#F9D1DB', '#FBDDE6', '#FDE9EF'];
+
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <button onClick={() => setPage('main')} className="jelly-button" style={{ width: 36, height: 36 }}>
+            <Icon name="chevron-left" size={18} />
+          </button>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>用量统计</h2>
+        </div>
+        
+        {!usageData ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>加载中...</div>
+        ) : (
+          <>
+            {/* 数字卡片 */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <div className="jelly-card" style={{ flex: 1, padding: 16, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>今日用量</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>
+                  {today >= 1000 ? (today / 1000).toFixed(1) + 'k' : today.toLocaleString()}
                 </div>
-              );
-            })}
-            {usageData.models.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
-                还没有用量记录，聊几句就有了
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>tokens</div>
+              </div>
+              <div className="jelly-card" style={{ flex: 1, padding: 16, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>累计用量</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {total >= 1000 ? (total / 1000).toFixed(1) + 'k' : total.toLocaleString()}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>tokens</div>
+              </div>
+            </div>
+
+            {/* 环形图 + 图例 */}
+            {models.length > 0 && (
+              <div className="jelly-card" style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <DonutChart data={models} size={140} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>用量分布</div>
+                  {models.map((item, i) => {
+                    const percent = total > 0 ? ((item.used / total) * 100).toFixed(1) : 0;
+                    return (
+                      <div key={item.modelId || i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 5, background: donutColors[i % donutColors.length], flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.name}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{percent}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
-          
-          <div className="jelly-card" style={{ marginTop: 16, padding: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>累计总用量</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {usageData.total.toLocaleString()} tokens
-              </span>
+
+            {/* 各模型详情 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {models.map((item, i) => {
+                const percent = item.total > 0 ? Math.min(100, (item.used / item.total) * 100) : 0;
+                return (
+                  <div key={item.modelId || i} className="jelly-card" style={{ padding: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 4, background: donutColors[i % donutColors.length] }} />
+                        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{item.name}</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {item.used.toLocaleString()} / {item.total.toLocaleString()}
+                      </span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: 'var(--glass-bg)', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 4,
+                        width: `${percent}%`,
+                        background: donutColors[i % donutColors.length],
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+              {models.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+                  还没有用量记录，聊几句就有了
+                </div>
+              )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>今日用量</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {usageData.today.toLocaleString()} tokens
-              </span>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+          </>
+        )}
+      </div>
+    );
+  };
 
   // 通用设置页面
   const renderGeneralPage = () => (
@@ -306,27 +380,28 @@ export default function SettingsView() {
         {saving && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>保存中...</span>}
       </div>
       
-      {/* 模型选择 */}
+      {/* 模型选择 - 只显示 Claude */}
       <div className="jelly-card" style={{ padding: 16, marginBottom: 14 }}>
         <label style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>
           默认模型
         </label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {GEMINI_MODELS.map(m => (
-            <div
-              key={m.id}
-              onClick={() => { setModel(m.id); autoSave('model', m.id); }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
-                background: model === m.id ? 'var(--accent-lighter)' : 'var(--glass-bg)',
-              }}
-            >
-              <span style={{ fontSize: 14, color: model === m.id ? 'var(--accent)' : 'var(--text-primary)' }}>{m.name}</span>
-              {model === m.id && <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>已选</span>}
-            </div>
-          ))}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 14px', borderRadius: 12,
+            background: 'var(--accent-lighter)',
+            border: '1px solid var(--accent)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: 'var(--accent)' }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{CLAUDE_MODEL.name}</span>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>当前使用</span>
         </div>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+          主对话使用 Claude Sonnet 4.6，后台任务自动使用免费模型
+        </p>
       </div>
 
       {/* 系统提示词 */}
@@ -441,7 +516,6 @@ export default function SettingsView() {
       </button>
       <input ref={fileInputRef} type="file" accept=".txt" style={{ display: 'none' }} onChange={handleFileUpload} />
       
-      {/* 已上传的参考文件列表 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {loadingFiles ? (
           <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>加载中...</div>

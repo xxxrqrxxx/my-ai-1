@@ -42,23 +42,19 @@ export default function MemoryView({ onBack }) {
   const [keepRounds, setKeepRounds] = useState(6);
   const [saving, setSaving] = useState(false);
   
-  // 自定义标签
   const [customTags, setCustomTags] = useState([]);
   const [newTagName, setNewTagName] = useState('');
   const [editingTag, setEditingTag] = useState(null);
   const [editingTagName, setEditingTagName] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(null);
 
-  // 所有标签 = 系统标签 + 自定义标签
   const allTags = [...MEMORY_CATEGORIES, ...customTags];
   const categories = ['全部', ...allTags];
   
-  // 加载记忆
   const loadMemories = async () => {
   setLoading(true);
   try {
     const data = await getMemories();
-    // 过滤掉参考资料，不在记忆页面显示
     const filtered = data.filter(m => m.category !== 'reference');
     setMemories(filtered);
   } catch (error) {
@@ -67,7 +63,6 @@ export default function MemoryView({ onBack }) {
     setLoading(false);
   }
 };
-
 
   useEffect(() => {
     loadMemories();
@@ -79,7 +74,6 @@ export default function MemoryView({ onBack }) {
     return matchSearch && matchCategory;
   });
 
-  // 空标签
   const emptyTags = allTags.filter(tag => !memories.some(m => m.category === tag));
 
   const handleAdd = () => {
@@ -117,7 +111,7 @@ export default function MemoryView({ onBack }) {
         });
       }
       setShowAddModal(false);
-      loadMemories(); // 重新加载
+      loadMemories();
     } catch (error) {
       console.error('保存记忆失败:', error);
       alert('保存失败，请检查后端');
@@ -137,7 +131,6 @@ export default function MemoryView({ onBack }) {
     }
   };
 
-  // 添加标签
   const handleAddTag = () => {
     if (newTagName.trim() && !allTags.includes(newTagName.trim())) {
       setCustomTags(prev => [...prev, newTagName.trim()]);
@@ -146,10 +139,8 @@ export default function MemoryView({ onBack }) {
     setShowAddTag(false);
   };
 
-  // 系统标签重命名映射（因为 MEMORY_CATEGORIES 是常量不能改，用这个来覆盖显示）
   const [renamedSystemTags, setRenamedSystemTags] = useState({});
 
-  // 重命名标签（所有标签都能改）
   const handleRenameTag = (oldName, newName) => {
     if (!newName.trim() || newName.trim() === oldName) return;
     if (allTags.includes(newName.trim())) return;
@@ -166,16 +157,12 @@ export default function MemoryView({ onBack }) {
     if (newCategory === oldName) setNewCategory(newName.trim());
   };
 
-  // 实际显示的标签名（考虑重命名）
   const displayTagName = (tag) => renamedSystemTags[tag] || tag;
 
-  // 实际可用的标签列表（考虑重命名后的系统标签）
   const effectiveTags = allTags.map(t => renamedSystemTags[t] || t);
 
-  // 已删除的系统标签
   const [deletedSystemTags, setDeletedSystemTags] = useState([]);
 
-  // 删除标签（所有标签都能删，删除后记忆移到第一个标签）
   const handleDeleteTag = (tagName) => {
     const originalName = Object.keys(renamedSystemTags).find(k => renamedSystemTags[k] === tagName) || tagName;
     const defaultTag = effectiveTags.find(t => t !== tagName) || '未分类';
@@ -195,11 +182,9 @@ export default function MemoryView({ onBack }) {
     if (newCategory === tagName) setNewCategory(defaultTag);
   };
 
-  // 最终显示的标签列表（排除已删除的系统标签）
   const visibleTags = allTags.filter(t => !deletedSystemTags.includes(t)).map(t => renamedSystemTags[t] || t);
   const visibleCategories = ['全部', ...visibleTags];
 
-  // 改记忆分类
   const handleChangeCategory = async (memoryId, newCat) => {
     try {
       await updateMemory(memoryId, { category: newCat });
@@ -210,7 +195,6 @@ export default function MemoryView({ onBack }) {
     setShowCategoryPicker(null);
   };
 
-  // 一键删空标签
   const handleDeleteEmptyTags = () => {
     emptyTags.forEach(tag => handleDeleteTag(tag));
   };
@@ -228,7 +212,6 @@ export default function MemoryView({ onBack }) {
     setEditingTagName('');
   };
 
-  // 格式化时间
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('zh-CN');
@@ -237,7 +220,6 @@ export default function MemoryView({ onBack }) {
   return (
     <div className="page-container">
       <div className="page-content" style={{ padding: '50px 16px 100px' }}>
-        {/* 标题 */}
         <div style={{ marginBottom: 18, textAlign: 'center' }}>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
             Memory
@@ -247,7 +229,6 @@ export default function MemoryView({ onBack }) {
           </p>
         </div>
 
-        {/* 搜索框 + 记忆设置按钮 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           <div className="jelly-card" style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: 8,
@@ -270,7 +251,6 @@ export default function MemoryView({ onBack }) {
           </button>
         </div>
 
-        {/* 分类标签 */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, alignItems: 'center' }}>
           {visibleCategories.map(cat => (
             <button
@@ -294,7 +274,6 @@ export default function MemoryView({ onBack }) {
             </button>
           ))}
           
-          {/* 添加标签按钮 */}
           <button
             onClick={() => setShowAddTag(true)}
             className="jelly-button"
@@ -308,7 +287,6 @@ export default function MemoryView({ onBack }) {
             <Icon name="plus" size={16} color="var(--accent)" />
           </button>
           
-          {/* 标签管理按钮 */}
           <button
             onClick={() => setShowTagManager(true)}
             className="jelly-button"
@@ -323,7 +301,6 @@ export default function MemoryView({ onBack }) {
           </button>
         </div>
 
-        {/* 记忆列表 */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>加载中...</div>
         ) : filteredMemories.length === 0 ? (
@@ -335,7 +312,6 @@ export default function MemoryView({ onBack }) {
             {filteredMemories.map(memory => (
               <div key={memory.id} className="jelly-card" style={{ padding: 14, position: 'relative' }}>
                 <div style={{ paddingRight: 60 }}>
-                  {/* 标签移到小标题前面，标签可点击改分类 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <button
                       onClick={() => setShowCategoryPicker(showCategoryPicker === memory.id ? null : memory.id)}
@@ -353,7 +329,6 @@ export default function MemoryView({ onBack }) {
                     </h3>
                   </div>
 
-                  {/* 分类选择器 */}
                   {showCategoryPicker === memory.id && (
                     <div style={{
                       display: 'flex', flexWrap: 'wrap', gap: 6,
@@ -389,7 +364,6 @@ export default function MemoryView({ onBack }) {
                     {memory.model_used && <><span>·</span><span>{memory.model_used}</span></>}
                   </div>
                 </div>
-                {/* 右下角操作按钮 */}
                 <div style={{
                   position: 'absolute', right: 10, bottom: 10,
                   display: 'flex', gap: 6,
@@ -406,7 +380,6 @@ export default function MemoryView({ onBack }) {
           </div>
         )}
 
-        {/* 悬浮添加按钮 */}
         <button
           onClick={handleAdd}
           className="jelly-button jelly-button-accent"
@@ -420,70 +393,72 @@ export default function MemoryView({ onBack }) {
         </button>
       </div>
 
-      {/* 新建/编辑记忆弹窗 */}
+      {/* 新建/编辑记忆弹窗 - 固定50vh */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16, marginTop: 8 }}>
+        <div className="modal-overlay" onClick={() => setShowAddModal(false)} style={{ zIndex: 2000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ height: '60vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16, marginTop: 8, flexShrink: 0 }}>
               {editingMemory ? '编辑记忆' : '新建记忆'}
             </h3>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>标题</label>
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="记忆标题"
-                className="jelly-input"
-                style={{ width: '100%', padding: '10px 14px', fontSize: 14 }}
-              />
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>内容</label>
-              <textarea
-                value={newContent}
-                onChange={(e) => setNewContent(e.target.value)}
-                placeholder="记忆内容..."
-                rows={4}
-                className="jelly-input"
-                style={{ width: '100%', padding: '10px 14px', fontSize: 14, resize: 'none' }}
-              />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>分类</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {visibleTags.map(cat => (
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>标题</label>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="记忆标题"
+                  className="jelly-input"
+                  style={{ width: '100%', padding: '10px 14px', fontSize: 14 }}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>内容</label>
+                <textarea
+                  value={newContent}
+                  onChange={(e) => setNewContent(e.target.value)}
+                  placeholder="记忆内容..."
+                  rows={4}
+                  className="jelly-input"
+                  style={{ width: '100%', padding: '10px 14px', fontSize: 14, resize: 'none' }}
+                />
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>分类</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {visibleTags.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setNewCategory(cat)}
+                      style={{
+                        padding: '6px 12px', borderRadius: 14, border: 'none',
+                        fontSize: 12, cursor: 'pointer',
+                        background: newCategory === cat ? 'var(--accent-gradient)' : 'var(--glass-bg)',
+                        color: newCategory === cat ? 'white' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {cat}
+                    </button>
+                  ))}
                   <button
-                    key={cat}
-                    onClick={() => setNewCategory(cat)}
+                    onClick={() => setShowAddTag(true)}
                     style={{
-                      padding: '6px 12px', borderRadius: 14, border: 'none',
+                      padding: '6px 12px', borderRadius: 14, 
+                      border: '1px dashed var(--text-muted)',
+                      background: 'transparent',
                       fontSize: 12, cursor: 'pointer',
-                      background: newCategory === cat ? 'var(--accent-gradient)' : 'var(--glass-bg)',
-                      color: newCategory === cat ? 'white' : 'var(--text-secondary)',
+                      color: 'var(--text-muted)',
+                      display: 'flex', alignItems: 'center', gap: 4,
                     }}
                   >
-                    {cat}
+                    <Icon name="plus" size={12} /> 新标签
                   </button>
-                ))}
-                <button
-                  onClick={() => setShowAddTag(true)}
-                  style={{
-                    padding: '6px 12px', borderRadius: 14, 
-                    border: '1px dashed var(--text-muted)',
-                    background: 'transparent',
-                    fontSize: 12, cursor: 'pointer',
-                    color: 'var(--text-muted)',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}
-                >
-                  <Icon name="plus" size={12} /> 新标签
-                </button>
+                </div>
               </div>
             </div>
             <button onClick={handleSave} disabled={saving} className="jelly-button jelly-button-accent" style={{
               width: '100%', height: 46, borderRadius: 23, fontSize: 15, fontWeight: 600,
-              opacity: saving ? 0.6 : 1,
+              opacity: saving ? 0.6 : 1, flexShrink: 0,
             }}>
               {saving ? '保存中...' : '保存'}
             </button>
@@ -491,45 +466,47 @@ export default function MemoryView({ onBack }) {
         </div>
       )}
 
-      {/* 记忆设置弹窗 */}
+      {/* 记忆设置弹窗 - 固定50vh */}
       {showSettingsModal && (
-        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 18, marginTop: 8 }}>
+        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)} style={{ zIndex: 2000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ height: '50vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 18, marginTop: 8, flexShrink: 0 }}>
               记忆设置
             </h3>
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>压缩阈值</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{compressThreshold} tokens</span>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>压缩阈值</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{compressThreshold} tokens</span>
+                </div>
+                <input
+                  type="range" min={2000} max={20000} step={500}
+                  value={compressThreshold}
+                  onChange={(e) => setCompressThreshold(parseInt(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  对话超过这个长度时自动压缩摘要
+                </p>
               </div>
-              <input
-                type="range" min={2000} max={20000} step={500}
-                value={compressThreshold}
-                onChange={(e) => setCompressThreshold(parseInt(e.target.value))}
-                style={{ width: '100%' }}
-              />
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                对话超过这个长度时自动压缩摘要
-              </p>
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>保留轮数</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{keepRounds} 轮</span>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>保留轮数</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>{keepRounds} 轮</span>
+                </div>
+                <input
+                  type="range" min={2} max={20} step={1}
+                  value={keepRounds}
+                  onChange={(e) => setKeepRounds(parseInt(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  压缩时保留最近多少轮对话不被压缩
+                </p>
               </div>
-              <input
-                type="range" min={2} max={20} step={1}
-                value={keepRounds}
-                onChange={(e) => setKeepRounds(parseInt(e.target.value))}
-                style={{ width: '100%' }}
-              />
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                压缩时保留最近多少轮对话不被压缩
-              </p>
             </div>
             <button onClick={() => setShowSettingsModal(false)} className="jelly-button jelly-button-accent" style={{
-              width: '100%', height: 46, borderRadius: 23, fontSize: 15, fontWeight: 600,
+              width: '100%', height: 46, borderRadius: 23, fontSize: 15, fontWeight: 600, flexShrink: 0,
             }}>
               确定
             </button>
@@ -537,24 +514,26 @@ export default function MemoryView({ onBack }) {
         </div>
       )}
 
-      {/* 添加标签弹窗 */}
+      {/* 添加标签弹窗 - 固定50vh */}
       {showAddTag && (
-        <div className="modal-overlay modal-center" onClick={() => setShowAddTag(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14 }}>
+        <div className="modal-overlay modal-center" onClick={() => setShowAddTag(false)} style={{ zIndex: 2000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ height: '50vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, flexShrink: 0 }}>
               添加标签
             </h3>
-            <input
-              type="text"
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              placeholder="标签名称"
-              className="jelly-input"
-              style={{ marginBottom: 14 }}
-              autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-            />
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="标签名称"
+                className="jelly-input"
+                style={{ marginBottom: 14 }}
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
               <button onClick={() => setShowAddTag(false)} className="jelly-button" style={{
                 flex: 1, height: 42, borderRadius: 21, fontSize: 14,
               }}>
@@ -570,11 +549,11 @@ export default function MemoryView({ onBack }) {
         </div>
       )}
 
-      {/* 标签管理弹窗 */}
+      {/* 标签管理弹窗 - 固定50vh */}
       {showTagManager && (
-        <div className="modal-overlay modal-center" onClick={() => { setShowTagManager(false); setEditingTag(null); }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div className="modal-overlay modal-center" onClick={() => { setShowTagManager(false); setEditingTag(null); }} style={{ zIndex: 2000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ height: '50vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
               <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)' }}>
                 管理标签
               </h3>
@@ -583,11 +562,11 @@ export default function MemoryView({ onBack }) {
               </button>
             </div>
             
-            <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+            <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
               所有标签都可以重命名或删除。删除标签后，该标签下的记忆会移到第一个标签。
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '50vh', overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {visibleTags.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
                   还没有标签
@@ -654,6 +633,7 @@ export default function MemoryView({ onBack }) {
                   marginTop: 14, width: '100%', padding: '10px',
                   border: '1px dashed #E87070', background: 'transparent',
                   borderRadius: 12, color: '#E87070', fontSize: 13, cursor: 'pointer',
+                  flexShrink: 0,
                 }}
               >
                 一键删除 {emptyTags.length} 个空标签
