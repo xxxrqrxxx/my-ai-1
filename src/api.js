@@ -42,3 +42,5 @@ export const getMindIntent = () => api.get('/api/mind/intent').then(r => r.data)
 
 // ===== 手机活动 =====
 export const getActivitySummary = () => api.get('/api/activity/summary').then(r => r.data);
+
+export const getUsage = () => api.get('/api/usage').then(r => r.data);

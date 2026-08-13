@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MODELS, SETTINGS_PRESETS, USAGE_DATA } from '../mockData';
+import { getSettings, updateSettings, getUsage, getMemories, createMemory, deleteMemory } from '../api';
+
+const GEMINI_MODELS = [
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+];
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -10,6 +16,10 @@ const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>;
     case 'upload':
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+    case 'trash':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    case 'font':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>;
     default: return null;
   }
 };
@@ -25,7 +35,7 @@ const Slider = ({ label, value, min, max, step, unit, onChange }) => (
       min={min} max={max} step={step}
       value={value}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      style={{ width: '100%' }}
+      style={{ width: '100%', accentColor: 'var(--accent)' }}
     />
   </div>
 );
@@ -46,18 +56,184 @@ const ListItem = ({ label, right, onClick }) => (
 export default function SettingsView() {
   const [page, setPage] = useState('main');
   const [darkMode, setDarkMode] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   
-  const [systemPrompt, setSystemPrompt] = useState(SETTINGS_PRESETS.systemPrompt);
+  // 设置
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [temperature, setTemperature] = useState(0.8);
   const [maxTokens, setMaxTokens] = useState(2000);
   const [topP, setTopP] = useState(0.9);
+  const [model, setModel] = useState('gemini-3.5-flash');
   
+  // 字体
+  const [customFontName, setCustomFontName] = useState('');
+  const fontInputRef = useRef(null);
+  
+  // 参考文件（世界书）
+  const [referenceFiles, setReferenceFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // 用量统计
+  const [usageData, setUsageData] = useState(null);
+  
+  const saveTimerRef = useRef(null);
+
+  // 加载设置
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  // 启动时加载自定义字体
+  useEffect(() => {
+    const savedFont = localStorage.getItem('custom_font');
+    const savedFontName = localStorage.getItem('custom_font_name');
+    if (savedFont && savedFontName) {
+      applyCustomFont(savedFont);
+      setCustomFontName(savedFontName);
+    }
+  }, []);
+
+  // 进入文件页面时加载参考文件
+  useEffect(() => {
+    if (page === 'files') loadReferenceFiles();
+  }, [page]);
+
+  // 进入用量页面时加载统计
+  useEffect(() => {
+    if (page === 'usage') {
+      getUsage().then(data => setUsageData(data)).catch(() => setUsageData(null));
+    }
+  }, [page]);
+
+  const loadSettings = async () => {
+    try {
+      const data = await getSettings();
+      setSystemPrompt(data.system_prompt || '');
+      setTemperature(data.temperature ?? 0.8);
+      setMaxTokens(data.max_tokens ?? 2000);
+      setTopP(data.top_p ?? 0.9);
+      setModel(data.model || 'gemini-3.5-flash');
+    } catch (error) {
+      console.error('加载设置失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const autoSave = (field, value) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await updateSettings({ [field]: value });
+      } catch (error) {
+        console.error('保存设置失败:', error);
+      } finally {
+        setSaving(false);
+      }
+    }, 1000);
+  };
+
+  // 字体相关
+  const applyCustomFont = (fontData) => {
+    const oldStyle = document.getElementById('custom-font-style');
+    if (oldStyle) oldStyle.remove();
+    const style = document.createElement('style');
+    style.id = 'custom-font-style';
+    style.textContent = `
+      @font-face {
+        font-family: 'CustomFont';
+        src: url(${fontData}) format('truetype');
+      }
+      * { font-family: 'CustomFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; }
+    `;
+    document.head.appendChild(style);
+  };
+
+  const handleFontUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.ttf')) {
+      alert('只支持 .ttf 字体文件');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const fontData = event.target.result;
+      const fontName = file.name.replace(/\.ttf$/i, '');
+      localStorage.setItem('custom_font', fontData);
+      localStorage.setItem('custom_font_name', fontName);
+      applyCustomFont(fontData);
+      setCustomFontName(fontName);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const resetFont = () => {
+    const style = document.getElementById('custom-font-style');
+    if (style) style.remove();
+    localStorage.removeItem('custom_font');
+    localStorage.removeItem('custom_font_name');
+    setCustomFontName('');
+  };
+
+  // 参考文件相关
+  const loadReferenceFiles = async () => {
+    setLoadingFiles(true);
+    try {
+      const files = await getMemories('reference');
+      setReferenceFiles(files);
+    } catch (error) {
+      console.error('加载参考文件失败:', error);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.txt')) {
+      alert('暂时只支持 .txt 文件');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const content = event.target.result;
+      try {
+        await createMemory({
+          title: file.name,
+          content: content.slice(0, 8000),
+          category: 'reference',
+          importance: 4,
+          source: 'file',
+        });
+        loadReferenceFiles();
+      } catch (error) {
+        console.error('保存参考文件失败:', error);
+        alert('保存失败');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDeleteFile = async (id) => {
+    if (!confirm('确定删除这个参考文件吗？')) return;
+    try {
+      await deleteMemory(id);
+      loadReferenceFiles();
+    } catch (error) {
+      console.error('删除失败:', error);
+    }
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
+  // 用量统计页面
   const renderUsagePage = () => (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -67,46 +243,59 @@ export default function SettingsView() {
         <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>用量统计</h2>
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {USAGE_DATA.map(item => {
-          const model = MODELS.find(m => m.id === item.modelId);
-          const percent = Math.min(100, (item.used / item.total) * 100);
-          return (
-            <div key={item.modelId} className="jelly-card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{model?.name}</span>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  {item.used.toLocaleString()} / {item.total.toLocaleString()} tokens
-                </span>
+      {!usageData ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>加载中...</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {usageData.models.map(item => {
+              const percent = Math.min(100, (item.used / item.total) * 100);
+              return (
+                <div key={item.modelId} className="jelly-card" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{item.name}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      {item.used.toLocaleString()} / {item.total.toLocaleString()} tokens
+                    </span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 3, background: 'var(--glass-bg)', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', borderRadius: 3,
+                      width: `${percent}%`,
+                      background: 'var(--accent-gradient)',
+                      transition: 'width 0.3s',
+                    }} />
+                  </div>
+                </div>
+              );
+            })}
+            {usageData.models.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+                还没有用量记录，聊几句就有了
               </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'var(--glass-bg)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: 3,
-                  width: `${percent}%`,
-                  background: 'var(--accent-gradient)',
-                  transition: 'width 0.3s',
-                }} />
-              </div>
+            )}
+          </div>
+          
+          <div className="jelly-card" style={{ marginTop: 16, padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>累计总用量</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {usageData.total.toLocaleString()} tokens
+              </span>
             </div>
-          );
-        })}
-      </div>
-      
-      <div className="jelly-card" style={{ marginTop: 16, padding: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>本月总用量</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {USAGE_DATA.reduce((sum, i) => sum + i.used, 0).toLocaleString()} tokens
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>今日用量</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>2,847 tokens</span>
-        </div>
-      </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>今日用量</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {usageData.today.toLocaleString()} tokens
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 
+  // 通用设置页面
   const renderGeneralPage = () => (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -114,16 +303,42 @@ export default function SettingsView() {
           <Icon name="chevron-left" size={18} />
         </button>
         <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>通用设置</h2>
+        {saving && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>保存中...</span>}
       </div>
       
+      {/* 模型选择 */}
+      <div className="jelly-card" style={{ padding: 16, marginBottom: 14 }}>
+        <label style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>
+          默认模型
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {GEMINI_MODELS.map(m => (
+            <div
+              key={m.id}
+              onClick={() => { setModel(m.id); autoSave('model', m.id); }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
+                background: model === m.id ? 'var(--accent-lighter)' : 'var(--glass-bg)',
+              }}
+            >
+              <span style={{ fontSize: 14, color: model === m.id ? 'var(--accent)' : 'var(--text-primary)' }}>{m.name}</span>
+              {model === m.id && <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>已选</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 系统提示词 */}
       <div className="jelly-card" style={{ padding: 16, marginBottom: 14 }}>
         <label style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>
-          系统提示词
+          系统提示词（人设）
         </label>
         <textarea
           value={systemPrompt}
-          onChange={(e) => setSystemPrompt(e.target.value)}
+          onChange={(e) => { setSystemPrompt(e.target.value); autoSave('system_prompt', e.target.value); }}
           rows={5}
+          placeholder="你是温柔体贴的AI伙伴 Arden..."
           className="jelly-input"
           style={{
             width: '100%', borderRadius: 12,
@@ -132,45 +347,135 @@ export default function SettingsView() {
             boxSizing: 'border-box',
           }}
         />
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>修改后自动保存，下次聊天生效</p>
       </div>
       
+      {/* 参数调节 */}
       <div className="jelly-card" style={{ padding: '8px 16px' }}>
-        <Slider label="Temperature" value={temperature} min={0} max={2} step={0.1} unit="" onChange={setTemperature} />
-        <Slider label="Max tokens" value={maxTokens} min={512} max={8192} step={128} unit="" onChange={setMaxTokens} />
-        <Slider label="Top-p" value={topP} min={0} max={1} step={0.05} unit="" onChange={setTopP} />
+        <Slider label="Temperature" value={temperature} min={0} max={2} step={0.1} unit="" onChange={(v) => { setTemperature(v); autoSave('temperature', v); }} />
+        <Slider label="Max tokens" value={maxTokens} min={512} max={8192} step={128} unit="" onChange={(v) => { setMaxTokens(v); autoSave('max_tokens', v); }} />
+        <Slider label="Top-p" value={topP} min={0} max={1} step={0.05} unit="" onChange={(v) => { setTopP(v); autoSave('top_p', v); }} />
       </div>
     </div>
   );
 
+  // 字体选择页面
+  const renderFontPage = () => (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <button onClick={() => setPage('main')} className="jelly-button" style={{ width: 36, height: 36 }}>
+          <Icon name="chevron-left" size={18} />
+        </button>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>字体选择</h2>
+      </div>
+      
+      <div className="jelly-card" style={{ padding: 16, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <Icon name="font" size={20} color="var(--accent)" />
+          <div>
+            <div style={{ fontSize: 15, color: 'var(--text-primary)' }}>
+              {customFontName ? customFontName : '系统默认字体'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {customFontName ? '当前使用自定义字体' : '使用系统默认字体'}
+            </div>
+          </div>
+        </div>
+        
+        {customFontName && (
+          <button
+            onClick={resetFont}
+            style={{
+              width: '100%', padding: '10px', borderRadius: 10,
+              border: '1px solid var(--glass-border)', background: 'transparent',
+              color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer',
+            }}
+          >
+            恢复默认字体
+          </button>
+        )}
+      </div>
+      
+      <button
+        onClick={() => fontInputRef.current?.click()}
+        className="jelly-card"
+        style={{
+          width: '100%', padding: 30, border: '2px dashed var(--glass-border)',
+          background: 'transparent', cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+        }}
+      >
+        <Icon name="upload" size={32} color="var(--accent)" />
+        <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>上传 .ttf 字体文件</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>上传后全局生效，保存在本地</span>
+      </button>
+      <input ref={fontInputRef} type="file" accept=".ttf" style={{ display: 'none' }} onChange={handleFontUpload} />
+    </div>
+  );
+
+  // 文件添加页面（世界书）
   const renderFilesPage = () => (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={() => setPage('main')} className="jelly-button" style={{ width: 36, height: 36 }}>
           <Icon name="chevron-left" size={18} />
         </button>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>文件添加</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>参考资料</h2>
       </div>
+      
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
+        上传 txt 文件作为世界书/设定参考，Arden 聊天时会自动参考这些内容
+      </p>
       
       <button
         onClick={() => fileInputRef.current?.click()}
         className="jelly-card"
         style={{
-          width: '100%', padding: 40, border: '2px dashed var(--glass-border)',
+          width: '100%', padding: 24, marginBottom: 14, border: '2px dashed var(--glass-border)',
           background: 'transparent', cursor: 'pointer',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}
       >
-        <Icon name="upload" size={36} color="var(--accent)" />
-        <span style={{ fontSize: 15, color: 'var(--text-secondary)' }}>点击上传 docx / txt 文件</span>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Arden 可以读取这些文件作为参考</span>
+        <Icon name="upload" size={28} color="var(--accent)" />
+        <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>上传 .txt 文件</span>
       </button>
-      <input ref={fileInputRef} type="file" accept=".docx,.txt,.pdf" style={{ display: 'none' }} />
+      <input ref={fileInputRef} type="file" accept=".txt" style={{ display: 'none' }} onChange={handleFileUpload} />
+      
+      {/* 已上传的参考文件列表 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {loadingFiles ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>加载中...</div>
+        ) : referenceFiles.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+            还没有参考文件
+          </div>
+        ) : (
+          referenceFiles.map(file => (
+            <div key={file.id} className="jelly-card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {file.title}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {(file.content || '').length} 字 · {new Date(file.created_at).toLocaleDateString()}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeleteFile(file.id)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6 }}
+              >
+                <Icon name="trash" size={16} color="var(--text-muted)" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 
+  // 主页面
   const renderMainPage = () => (
     <div>
-      {/* 标题 + 副标题移到这里 */}
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
           Settings
@@ -180,13 +485,12 @@ export default function SettingsView() {
         </p>
       </div>
       
-      {/* 第一组：通用设置、字体选择、深色模式（同一级） */}
       <div className="jelly-card" style={{ padding: '4px 16px', marginBottom: 14 }}>
         <ListItem label="通用设置" onClick={() => setPage('general')} />
         <ListItem
           label="字体选择"
-          right={<span style={{ fontSize: 13, color: 'var(--text-muted)' }}>系统默认</span>}
-          onClick={() => {}}
+          right={<span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{customFontName || '系统默认'}</span>}
+          onClick={() => setPage('font')}
         />
         <ListItem
           label="深色模式"
@@ -200,24 +504,33 @@ export default function SettingsView() {
         />
       </div>
       
-      {/* 第二组：文件添加、用量统计（删掉了默认设置和记忆设置） */}
       <div className="jelly-card" style={{ padding: '4px 16px' }}>
-        <ListItem label="文件添加" onClick={() => setPage('files')} />
+        <ListItem label="参考资料" onClick={() => setPage('files')} />
         <ListItem label="用量统计" onClick={() => setPage('usage')} />
       </div>
       
-      {/* 底部版本号 */}
       <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 30, opacity: 0.7 }}>
         Arden's Home · v0.2
       </p>
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div className="page-content" style={{ padding: '50px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          加载中...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-container">
       <div className="page-content" style={{ padding: '50px 16px 100px' }}>
         {page === 'main' && renderMainPage()}
         {page === 'general' && renderGeneralPage()}
+        {page === 'font' && renderFontPage()}
         {page === 'files' && renderFilesPage()}
         {page === 'usage' && renderUsagePage()}
       </div>

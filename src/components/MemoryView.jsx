@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { mockMemories, MEMORY_CATEGORIES } from '../mockData';
+import React, { useState, useEffect } from 'react';
+import { getMemories, createMemory, updateMemory, deleteMemory } from '../api';
+import { MEMORY_CATEGORIES } from '../mockData';
 
 const Icon = ({ name, size = 18, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -24,8 +25,9 @@ const Icon = ({ name, size = 18, color = 'var(--text-secondary)' }) => {
   }
 };
 
-export default function MemoryView() {
-  const [memories, setMemories] = useState(mockMemories);
+export default function MemoryView({ onBack }) {
+  const [memories, setMemories] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -38,6 +40,7 @@ export default function MemoryView() {
   const [newCategory, setNewCategory] = useState(MEMORY_CATEGORIES[0]);
   const [compressThreshold, setCompressThreshold] = useState(6000);
   const [keepRounds, setKeepRounds] = useState(6);
+  const [saving, setSaving] = useState(false);
   
   // 自定义标签
   const [customTags, setCustomTags] = useState([]);
@@ -50,6 +53,23 @@ export default function MemoryView() {
   const allTags = [...MEMORY_CATEGORIES, ...customTags];
   const categories = ['全部', ...allTags];
   
+  // 加载记忆
+  const loadMemories = async () => {
+    setLoading(true);
+    try {
+      const data = await getMemories();
+      setMemories(data);
+    } catch (error) {
+      console.error('加载记忆失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMemories();
+  }, []);
+
   const filteredMemories = memories.filter(m => {
     const matchSearch = m.title.includes(searchQuery) || m.content.includes(searchQuery);
     const matchCategory = activeCategory === '全部' || m.category === activeCategory;
@@ -75,35 +95,43 @@ export default function MemoryView() {
     setShowAddModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!newTitle.trim()) return;
-    if (editingMemory) {
-      setMemories(prev => prev.map(m => 
-        m.id === editingMemory.id 
-          ? { ...m, title: newTitle, content: newContent, category: newCategory }
-          : m
-      ));
-    } else {
-      setMemories(prev => [{
-        id: Date.now(),
-        title: newTitle,
-        content: newContent,
-        category: newCategory,
-        source: 'user',
-        model: null,
-        time: new Date().toISOString().split('T')[0],
-        // 后端记忆库预留字段
-        importance: 3,
-        keywords: [],
-        emotional_valence: 'neutral',
-        pulse: 1.0,
-      }, ...prev]);
+    setSaving(true);
+    try {
+      if (editingMemory) {
+        await updateMemory(editingMemory.id, {
+          title: newTitle,
+          content: newContent,
+          category: newCategory,
+        });
+      } else {
+        await createMemory({
+          title: newTitle,
+          content: newContent,
+          category: newCategory,
+          source: 'user',
+        });
+      }
+      setShowAddModal(false);
+      loadMemories(); // 重新加载
+    } catch (error) {
+      console.error('保存记忆失败:', error);
+      alert('保存失败，请检查后端');
+    } finally {
+      setSaving(false);
     }
-    setShowAddModal(false);
   };
 
-  const handleDelete = (id) => {
-    setMemories(prev => prev.filter(m => m.id !== id));
+  const handleDelete = async (id) => {
+    if (!confirm('确定删除这条记忆吗？')) return;
+    try {
+      await deleteMemory(id);
+      loadMemories();
+    } catch (error) {
+      console.error('删除记忆失败:', error);
+      alert('删除失败');
+    }
   };
 
   // 添加标签
@@ -169,8 +197,13 @@ export default function MemoryView() {
   const visibleCategories = ['全部', ...visibleTags];
 
   // 改记忆分类
-  const handleChangeCategory = (memoryId, newCat) => {
-    setMemories(prev => prev.map(m => m.id === memoryId ? { ...m, category: newCat } : m));
+  const handleChangeCategory = async (memoryId, newCat) => {
+    try {
+      await updateMemory(memoryId, { category: newCat });
+      setMemories(prev => prev.map(m => m.id === memoryId ? { ...m, category: newCat } : m));
+    } catch (error) {
+      console.error('修改分类失败:', error);
+    }
     setShowCategoryPicker(null);
   };
 
@@ -190,6 +223,12 @@ export default function MemoryView() {
     }
     setEditingTag(null);
     setEditingTagName('');
+  };
+
+  // 格式化时间
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleDateString('zh-CN');
   };
 
   return (
@@ -282,79 +321,87 @@ export default function MemoryView() {
         </div>
 
         {/* 记忆列表 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filteredMemories.map(memory => (
-            <div key={memory.id} className="jelly-card" style={{ padding: 14, position: 'relative' }}>
-              <div style={{ paddingRight: 60 }}>
-                {/* 标签移到小标题前面，标签可点击改分类 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <button
-                    onClick={() => setShowCategoryPicker(showCategoryPicker === memory.id ? null : memory.id)}
-                    className="tag"
-                    style={{ 
-                      fontSize: 11, cursor: 'pointer', border: 'none',
-                      background: 'var(--accent-lighter)', color: 'var(--text-secondary)',
-                    }}
-                    title="点击修改分类"
-                  >
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>加载中...</div>
+        ) : filteredMemories.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+            还没有记忆，点右下角 + 新建一条吧
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filteredMemories.map(memory => (
+              <div key={memory.id} className="jelly-card" style={{ padding: 14, position: 'relative' }}>
+                <div style={{ paddingRight: 60 }}>
+                  {/* 标签移到小标题前面，标签可点击改分类 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <button
+                      onClick={() => setShowCategoryPicker(showCategoryPicker === memory.id ? null : memory.id)}
+                      className="tag"
+                      style={{ 
+                        fontSize: 11, cursor: 'pointer', border: 'none',
+                        background: 'var(--accent-lighter)', color: 'var(--text-secondary)',
+                      }}
+                      title="点击修改分类"
+                    >
                     {displayTagName(memory.category)}
-                  </button>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {memory.title}
-                  </h3>
-                </div>
-
-                {/* 分类选择器 */}
-                {showCategoryPicker === memory.id && (
-                  <div style={{
-                    display: 'flex', flexWrap: 'wrap', gap: 6,
-                    marginBottom: 10, padding: '8px 10px',
-                    background: 'var(--glass-bg-strong)', borderRadius: 12,
-                  }}>
-                    {visibleTags.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => handleChangeCategory(memory.id, cat)}
-                        style={{
-                          padding: '4px 10px', borderRadius: 12, border: 'none',
-                          fontSize: 12, cursor: 'pointer',
-                          background: displayTagName(memory.category) === cat ? 'var(--accent-gradient)' : 'var(--glass-bg)',
-                          color: displayTagName(memory.category) === cat ? 'white' : 'var(--text-secondary)',
-                          display: 'flex', alignItems: 'center', gap: 4,
-                        }}
-                      >
-                        {cat}
-                        {displayTagName(memory.category) === cat && <Icon name="check" size={10} color="white" />}
-                      </button>
-                    ))}
+                    </button>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {memory.title}
+                    </h3>
                   </div>
-                )}
 
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8 }}>
-                  {memory.content}
-                </p>
-                <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                  <span>{memory.source === 'auto' ? '自动记录' : '手动添加'}</span>
-                  <span>·</span>
-                  <span>{memory.time}</span>
-                  {memory.model && <><span>·</span><span>{memory.model}</span></>}
+                  {/* 分类选择器 */}
+                  {showCategoryPicker === memory.id && (
+                    <div style={{
+                      display: 'flex', flexWrap: 'wrap', gap: 6,
+                      marginBottom: 10, padding: '8px 10px',
+                      background: 'var(--glass-bg-strong)', borderRadius: 12,
+                    }}>
+                      {visibleTags.map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => handleChangeCategory(memory.id, cat)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 12, border: 'none',
+                            fontSize: 12, cursor: 'pointer',
+                            background: displayTagName(memory.category) === cat ? 'var(--accent-gradient)' : 'var(--glass-bg)',
+                            color: displayTagName(memory.category) === cat ? 'white' : 'var(--text-secondary)',
+                            display: 'flex', alignItems: 'center', gap: 4,
+                          }}
+                        >
+                          {cat}
+                          {displayTagName(memory.category) === cat && <Icon name="check" size={10} color="white" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8 }}>
+                    {memory.content}
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span>{memory.source === 'auto' ? '自动记录' : '手动添加'}</span>
+                    <span>·</span>
+                    <span>{formatTime(memory.created_at)}</span>
+                    {memory.model_used && <><span>·</span><span>{memory.model_used}</span></>}
+                  </div>
+                </div>
+                {/* 右下角操作按钮 */}
+                <div style={{
+                  position: 'absolute', right: 10, bottom: 10,
+                  display: 'flex', gap: 6,
+                }}>
+                  <button onClick={() => handleEdit(memory)} className="jelly-button" style={{ width: 30, height: 30 }}>
+                    <Icon name="edit" size={14} />
+                  </button>
+                  <button onClick={() => handleDelete(memory.id)} className="jelly-button" style={{ width: 30, height: 30 }}>
+                    <Icon name="trash" size={14} />
+                  </button>
                 </div>
               </div>
-              {/* 右下角操作按钮 */}
-              <div style={{
-                position: 'absolute', right: 10, bottom: 10,
-                display: 'flex', gap: 6,
-              }}>
-                <button onClick={() => handleEdit(memory)} className="jelly-button" style={{ width: 30, height: 30 }}>
-                  <Icon name="edit" size={14} />
-                </button>
-                <button onClick={() => handleDelete(memory.id)} className="jelly-button" style={{ width: 30, height: 30 }}>
-                  <Icon name="trash" size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* 悬浮添加按钮 */}
         <button
@@ -431,10 +478,11 @@ export default function MemoryView() {
                 </button>
               </div>
             </div>
-            <button onClick={handleSave} className="jelly-button jelly-button-accent" style={{
+            <button onClick={handleSave} disabled={saving} className="jelly-button jelly-button-accent" style={{
               width: '100%', height: 46, borderRadius: 23, fontSize: 15, fontWeight: 600,
+              opacity: saving ? 0.6 : 1,
             }}>
-              保存
+              {saving ? '保存中...' : '保存'}
             </button>
           </div>
         </div>
