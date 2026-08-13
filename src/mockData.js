@@ -18,10 +18,11 @@ export const STATUS_PRESETS = [
 // 只保留Gemini系列模型
 export const MODELS = [
   {
-    id: 'gemini', name: 'Gemini', defaultModel: 'gemini-2.5-flash', color: '#8B5CF6',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    id: 'gemini', name: 'Gemini', defaultModel: 'gemini-3.5-flash', color: '#8B5CF6',
+    models: ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
   },
 ];
+
 
 
 export const SETTINGS_PRESETS = {
@@ -203,7 +204,7 @@ export const defaultSettings = {
   topP: 0.9,
   darkMode: false,
   fontFamily: '',
-  defaultModel: 'gemini-2.5-flash',
+  defaultModel: 'gemini-3.5-flash',
 };
 
 export const chatDates = [
