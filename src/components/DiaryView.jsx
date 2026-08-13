@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { mockDiaries } from '../mockData';
+import React, { useState, useEffect } from 'react';
+import { getMemories } from '../api';
 
 const Icon = ({ name, size = 18, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -14,63 +14,68 @@ const Icon = ({ name, size = 18, color = 'var(--text-secondary)' }) => {
 
 export default function DiaryView() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [diaries, setDiaries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDiaries();
+  }, []);
+
+  const loadDiaries = async () => {
+    try {
+      const all = await getMemories();
+      const diaryList = (all || []).filter(m => m.category === 'diary');
+      setDiaries(diaryList);
+    } catch (e) {
+      console.error('加载日记失败:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  
   const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-  
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  
-  const monthDiaries = mockDiaries.filter(d => {
-    const dDate = new Date(d.date);
+
+  const monthDiaries = diaries.filter(d => {
+    const dDate = new Date(d.created_at);
     return dDate.getFullYear() === year && dDate.getMonth() === month;
-  });
+  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
 
   return (
     <div className="page-container">
       <div className="page-content" style={{ padding: '50px 16px 100px' }}>
-        {/* 标题 - 副标题改中文 */}
         <div style={{ marginBottom: 20, textAlign: 'center' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-            Diary
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Arden 的私密日记
-          </p>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Diary</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Arden 的私密日记</p>
         </div>
 
-        {/* 月份切换 */}
-        <div className="jelly-card" style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px', marginBottom: 16,
-        }}>
-          <button onClick={prevMonth} className="jelly-button" style={{ width: 34, height: 34 }}>
-            <Icon name="chevron-left" size={16} />
-          </button>
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {year}年 {monthNames[month]}
-          </span>
-          <button onClick={nextMonth} className="jelly-button" style={{ width: 34, height: 34 }}>
-            <Icon name="chevron-right" size={16} />
-          </button>
+        <div className="jelly-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', marginBottom: 16 }}>
+          <button onClick={prevMonth} className="jelly-button" style={{ width: 34, height: 34 }}><Icon name="chevron-left" size={16} /></button>
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{year}年 {monthNames[month]}</span>
+          <button onClick={nextMonth} className="jelly-button" style={{ width: 34, height: 34 }}><Icon name="chevron-right" size={16} /></button>
         </div>
 
-        {/* 日记列表 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {monthDiaries.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>
-              这个月还没有日记
-            </div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>加载中...</div>
+          ) : monthDiaries.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>这个月还没有日记</div>
           ) : (
             monthDiaries.map(diary => (
               <div key={diary.id} className="jelly-card" style={{ padding: 16 }}>
                 <div style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600, marginBottom: 8 }}>
-                  {diary.date}
+                  {formatDate(diary.created_at)}
+                  {diary.title && <span style={{ marginLeft: 8, color: 'var(--text-secondary)', fontWeight: 400 }}>{diary.title}</span>}
                 </div>
-                <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                  {diary.content}
-                </p>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{diary.content}</p>
               </div>
             ))
           )}
