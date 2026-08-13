@@ -55,16 +55,19 @@ export default function MemoryView({ onBack }) {
   
   // 加载记忆
   const loadMemories = async () => {
-    setLoading(true);
-    try {
-      const data = await getMemories();
-      setMemories(data);
-    } catch (error) {
-      console.error('加载记忆失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const data = await getMemories();
+    // 过滤掉参考资料，不在记忆页面显示
+    const filtered = data.filter(m => m.category !== 'reference');
+    setMemories(filtered);
+  } catch (error) {
+    console.error('加载记忆失败:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     loadMemories();
