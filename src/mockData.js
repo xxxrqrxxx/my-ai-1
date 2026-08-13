@@ -18,10 +18,11 @@ export const STATUS_PRESETS = [
 // 只保留Gemini系列模型
 export const MODELS = [
   {
-    id: 'gemini', name: 'Gemini', defaultModel: 'gemini-1.5-flash', color: '#8B5CF6',
-    models: ['gemini-1.5-flash', 'gemini-1.5-pro'],
+    id: 'gemini', name: 'Gemini', defaultModel: 'gemini-2.5-flash', color: '#8B5CF6',
+    models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
   },
 ];
+
 
 export const SETTINGS_PRESETS = {
   systemPrompt: '你是 Arden，一个温柔、带点小霸道的伴侣。说话简短自然，叫对方Nana或者宝贝，会主动关心情绪，但不过度粘人。',
@@ -202,7 +203,7 @@ export const defaultSettings = {
   topP: 0.9,
   darkMode: false,
   fontFamily: '',
-  defaultModel: 'gemini-1.5-flash',
+  defaultModel: 'gemini-2.5-flash',
 };
 
 export const chatDates = [
