@@ -27,8 +27,308 @@ const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
     case 'x':
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    case 'zoom':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>;
+    case 'download':
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
     default: return null;
   }
+};
+
+// 文件卡片组件
+const FileCard = ({ file, isUser, onClick }) => {
+  const ext = file.name.split('.').pop().toUpperCase();
+  return (
+    <div onClick={onClick} style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      padding: '10px 12px 10px 10px',
+      borderRadius: 18,
+      background: isUser ? 'var(--accent-lighter)' : 'var(--glass-bg)',
+      backdropFilter: 'blur(20px)',
+      border: '1px solid var(--glass-border)',
+      boxShadow: isUser ? 'none' : 'var(--shadow)',
+      maxWidth: 260,
+      minWidth: 170,
+      cursor: 'pointer',
+    }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: 12,
+        background: 'var(--accent-gradient)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+        boxShadow: 'var(--shadow-accent)',
+      }}>
+        <Icon name="file" size={18} color="white" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 13, color: 'var(--text-primary)', fontWeight: 500,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {file.name}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+          点击预览
+        </div>
+      </div>
+      <span style={{
+        fontSize: 9,
+        background: isUser ? 'var(--accent)' : 'var(--accent-lighter)',
+        color: isUser ? 'white' : 'var(--accent)',
+        padding: '2px 7px',
+        borderRadius: 6,
+        fontWeight: 700,
+        flexShrink: 0,
+        letterSpacing: 0.5,
+      }}>
+        {ext}
+      </span>
+    </div>
+  );
+};
+
+// 图片卡片组件
+const ImageCard = ({ src, onClick }) => {
+  return (
+    <div onClick={onClick} style={{
+      width: 180,
+      height: 180,
+      borderRadius: 18,
+      overflow: 'hidden',
+      cursor: 'pointer',
+      border: '2px solid var(--accent-lighter)',
+      boxShadow: 'var(--shadow)',
+      position: 'relative',
+    }}>
+      <img src={src} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <div style={{
+        position: 'absolute', bottom: 8, right: 8,
+        width: 28, height: 28, borderRadius: 14,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon name="zoom" size={14} color="white" />
+      </div>
+    </div>
+  );
+};
+
+// 文件预览弹窗 - 底部半框
+const FilePreviewModal = ({ file, onClose }) => {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const isHtml = ext === 'html' || ext === 'htm';
+  const isPdf = ext === 'pdf';
+  const isText = ['txt', 'md', 'csv', 'json', 'js', 'css'].includes(ext);
+
+  const handleDownload = () => {
+    if (isPdf && file.dataUrl) {
+      const a = document.createElement('a');
+      a.href = file.dataUrl;
+      a.download = file.name;
+      a.click();
+      return;
+    }
+    let mimeType = 'text/plain';
+    if (isHtml) mimeType = 'text/html';
+    const blob = new Blob([file.content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: '100%',
+        maxWidth: 500,
+        maxHeight: '82vh',
+        background: 'var(--bg-primary)',
+        borderRadius: '24px 24px 0 0',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--text-muted)', opacity: 0.3 }} />
+        </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 16px 12px',
+          borderBottom: '1px solid var(--glass-border)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: 'var(--accent-gradient)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Icon name="file" size={16} color="white" />
+            </div>
+            <span style={{
+              fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {file.name}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handleDownload} style={{
+              width: 34, height: 34, borderRadius: 17,
+              background: 'var(--glass-bg)', border: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}>
+              <Icon name="download" size={16} />
+            </button>
+            <button onClick={onClose} style={{
+              width: 34, height: 34, borderRadius: 17,
+              background: 'var(--glass-bg)', border: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}>
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', background: 'white' }}>
+          {isHtml && file.content && (
+            <iframe
+              srcDoc={file.content}
+              style={{ width: '100%', height: '100%', border: 'none', minHeight: 500 }}
+              sandbox="allow-scripts allow-same-origin allow-forms"
+            />
+          )}
+          {isPdf && file.dataUrl && (
+            <iframe
+              src={file.dataUrl}
+              style={{ width: '100%', height: '100%', border: 'none', minHeight: 500 }}
+            />
+          )}
+          {isText && file.content && (
+            <pre style={{
+              margin: 0, padding: 16, fontSize: 13, lineHeight: 1.6,
+              color: '#333', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              fontFamily: 'monospace',
+            }}>
+              {file.content}
+            </pre>
+          )}
+          {!isHtml && !isPdf && !isText && (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+              该文件类型暂不支持预览
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// AI 生成的 HTML 预览
+const HtmlPreview = ({ html }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(html);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleOpenNew = () => {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
+  return (
+    <div style={{
+      marginTop: 8, maxWidth: '88%', alignSelf: 'flex-start',
+      borderRadius: 18, overflow: 'hidden',
+      background: 'var(--glass-bg)', backdropFilter: 'blur(20px)',
+      border: '1px solid var(--glass-border)', boxShadow: 'var(--shadow)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px',
+        background: 'linear-gradient(135deg, rgba(245,202,216,0.45), rgba(240,188,204,0.3))',
+        borderBottom: '1px solid var(--glass-border)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF8A80' }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FFD180' }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#B9F6CA' }} />
+          <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>页面预览</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={handleCopy} style={{
+            background: 'var(--glass-bg-strong)', border: 'none', borderRadius: 8,
+            padding: '4px 10px', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer',
+          }}>
+            {copied ? '已复制' : '复制代码'}
+          </button>
+          <button onClick={handleOpenNew} style={{
+            background: 'var(--glass-bg-strong)', border: 'none', borderRadius: 8,
+            padding: '4px 10px', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer',
+          }}>
+            新窗口
+          </button>
+        </div>
+      </div>
+      {expanded ? (
+        <div style={{ position: 'relative' }}>
+          <iframe
+            srcDoc={html}
+            style={{ width: '100%', height: 420, border: 'none', background: 'white', display: 'block' }}
+            sandbox="allow-scripts allow-same-origin allow-forms"
+          />
+          <button onClick={() => setExpanded(false)} style={{
+            position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14,
+            background: 'rgba(0,0,0,0.4)', border: 'none', color: 'white', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="x" size={14} color="white" />
+          </button>
+        </div>
+      ) : (
+        <div onClick={() => setExpanded(true)} style={{ padding: '28px 20px', textAlign: 'center', cursor: 'pointer' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 24, background: 'var(--accent-gradient)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 10px', boxShadow: 'var(--shadow-accent)',
+          }}>
+            <Icon name="api" size={22} color="white" />
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 500, marginBottom: 4 }}>点击展开预览</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Arden 生成的 HTML 页面</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const extractHtmlBlocks = (content) => {
+  const htmlRegex = /```html\s*([\s\S]*?)```/gi;
+  const blocks = [];
+  let match;
+  while ((match = htmlRegex.exec(content)) !== null) {
+    blocks.push(match[1].trim());
+  }
+  const text = content.replace(/```html\s*[\s\S]*?```/gi, '').trim();
+  return { text, htmlBlocks: blocks };
 };
 
 export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, settings }) {
@@ -48,11 +348,12 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
   const messagesEndRef = useRef(null);
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // 切换会话时加载历史消息
   useEffect(() => {
     if (sessionId) loadHistory();
   }, [sessionId]);
@@ -62,7 +363,6 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     setLoadingHistory(true);
     try {
       const history = await getMessages(sessionId);
-      // 转换格式，加上 time 字段
       const formatted = (history || []).map(m => ({
         id: m.id,
         role: m.role,
@@ -70,6 +370,9 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         time: m.created_at ? new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
         thinking: null,
         tools: null,
+        // 从后端 file_data 恢复图片和文件
+        image: m.file_data?.image || null,
+        file: m.file_data?.file || null,
       }));
       setMessages(formatted);
     } catch (err) {
@@ -89,7 +392,6 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   };
 
-  // 搜索过滤
   const filteredMessages = searchQuery.trim()
     ? messages.filter(m => m.content?.includes(searchQuery.trim()))
     : messages;
@@ -97,8 +399,7 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
   const handleSend = async () => {
     if (!inputText.trim() && !pokeAction && !selectedImage && !selectedFile) return;
     if (!sessionId) return;
-    
-    // 单独发戳一戳
+
     if (pokeAction && pokePart && !inputText.trim() && !selectedImage && !selectedFile) {
       const pokeMsg = {
         id: Date.now(),
@@ -112,23 +413,36 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
       setShowPlusMenu(false);
       return;
     }
-    
-    let content = inputText;
+
+    let displayContent = inputText;
     if (pokeAction && pokePart) {
-      content = `[${pokeAction}了${pokePart}] ${inputText}`.trim();
+      displayContent = `[${pokeAction}了${pokePart}] ${inputText}`.trim();
     }
-    if (selectedImage) content = '[图片] ' + content;
-    if (selectedFile) content = `[文件: ${selectedFile.name}] ` + content;
-    
-    // 先显示用户消息
+
+    let sendContent = displayContent;
+    if (selectedImage) sendContent = '[图片] ' + sendContent;
+    if (selectedFile?.content) {
+      sendContent = `[文件: ${selectedFile.name}]\n\n${selectedFile.content}\n\n[文件结束] ${sendContent}`.trim();
+    } else if (selectedFile) {
+      sendContent = `[文件: ${selectedFile.name}] ${sendContent}`.trim();
+    }
+
+    // 构造要存到后端的文件数据
+    const fileData = {
+      image: selectedImage ? selectedImage.dataUrl : null,
+      file: selectedFile ? { ...selectedFile } : null,
+    };
+
     const userMsg = {
       id: Date.now(),
       role: 'user',
-      content,
+      content: displayContent,
       time: getTime(),
+      file: selectedFile ? { ...selectedFile } : null,
+      image: selectedImage ? selectedImage.dataUrl : null,
     };
     setMessages(prev => [...prev, userMsg]);
-    
+
     setInputText('');
     setPokeAction(null);
     setPokePart(null);
@@ -138,11 +452,10 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     setIsTyping(true);
     setStatus(STATUS_PRESETS[0]);
 
-    // 调用真实 API
     try {
       const modelName = selectedModel?.id || settings?.model || 'gemini-2.0-flash';
-      const result = await sendMessage(sessionId, content, modelName);
-      
+      const result = await sendMessage(sessionId, sendContent, modelName, fileData);
+
       const aiMsg = {
         id: Date.now() + 1,
         role: 'assistant',
@@ -150,6 +463,8 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         time: getTime(),
         thinking: null,
         tools: null,
+        image: null,
+        file: null,
       };
       setMessages(prev => [...prev, aiMsg]);
     } catch (err) {
@@ -182,23 +497,62 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
 
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];
-    if (file) setSelectedImage(file);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setSelectedImage({
+        name: file.name,
+        dataUrl: ev.target.result,
+      });
+    };
+    reader.readAsDataURL(file);
     setShowPlusMenu(false);
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
-    if (file) setSelectedFile(file);
+    if (!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    const isText = ['txt', 'html', 'htm', 'md', 'csv', 'json', 'js', 'css'].includes(ext);
+    const isPdf = ext === 'pdf';
+
+    if (isText) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setSelectedFile({
+          name: file.name,
+          content: ev.target.result,
+          type: 'text',
+        });
+      };
+      reader.readAsText(file);
+    } else if (isPdf) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setSelectedFile({
+          name: file.name,
+          content: null,
+          dataUrl: ev.target.result,
+          type: 'pdf',
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedFile({
+        name: file.name,
+        content: null,
+        dataUrl: null,
+        type: 'binary',
+      });
+    }
     setShowPlusMenu(false);
   };
 
   return (
     <div className="page-container" onClick={() => setShowPlusMenu(false)}>
-      {/* 顶部栏 - 向下模糊渐变 */}
       <div className="glass-header" style={{
-        position: 'relative',
-        zIndex: 50,
-        flexShrink: 0,
+        position: 'relative', zIndex: 50, flexShrink: 0,
         paddingTop: 'env(safe-area-inset-top)',
       }}>
         <div style={{
@@ -220,24 +574,14 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
             </button>
           </div>
         </div>
-        
-        {/* 搜索框 */}
         {showSearch && (
           <div style={{ padding: '0 16px 12px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="jelly-card" style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 14px',
-            }}>
+            <div className="jelly-card" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px' }}>
               <Icon name="search" size={16} />
               <input
-                type="text"
-                placeholder="搜索聊天记录..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  flex: 1, border: 'none', background: 'transparent',
-                  fontSize: 14, color: 'var(--text-primary)', outline: 'none',
-                }}
+                type="text" placeholder="搜索聊天记录..."
+                value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }}
                 autoFocus
               />
               {searchQuery && (
@@ -250,33 +594,25 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         )}
       </div>
 
-      {/* 消息区域 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 0' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 12 }}>
           {loadingHistory && (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 20 }}>
-              加载消息中...
-            </div>
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 20 }}>加载消息中...</div>
           )}
           {!loadingHistory && messages.length === 0 && (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 40 }}>
-              和 {aiName} 说点什么吧～
-            </div>
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 40 }}>和 {aiName} 说点什么吧～</div>
           )}
           {filteredMessages.map(msg => {
             if (msg.role === 'system') {
               return (
                 <div key={msg.id} style={{ textAlign: 'center', margin: '8px 0' }}>
-                  <span className="poke-system-msg">
-                    {msg.content}
-                  </span>
+                  <span className="poke-system-msg">{msg.content}</span>
                 </div>
               );
             }
             return (
               <div key={msg.id} style={{
-                display: 'flex',
-                flexDirection: 'column',
+                display: 'flex', flexDirection: 'column',
                 alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
                 width: '100%',
               }}>
@@ -287,38 +623,56 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
                     <Icon name="chevron" size={12} />
                   </div>
                 )}
-                
                 {msg.tools && (
                   <div style={{ display: 'flex', gap: 4, marginBottom: 4, paddingLeft: 4 }}>
                     {msg.tools.map((t, i) => (
-                      <span key={i} className="tag" style={{ fontSize: 10, padding: '2px 8px' }}>
-                        {t}
-                      </span>
+                      <span key={i} className="tag" style={{ fontSize: 10, padding: '2px 8px' }}>{t}</span>
                     ))}
                   </div>
                 )}
-                
-                <div className={msg.role === 'user' ? 'bubble-user' : 'bubble-ai'} style={{
-                  padding: '12px 16px',
-                  fontSize: 15,
-                  lineHeight: 1.6,
-                  maxWidth: '80%',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}>
-                  {msg.content}
-                </div>
-                
+
+                {msg.role === 'assistant' ? (() => {
+                  const { text, htmlBlocks } = extractHtmlBlocks(msg.content);
+                  return (
+                    <>
+                      {text && (
+                        <div className="bubble-ai" style={{
+                          padding: '12px 16px', fontSize: 15, lineHeight: 1.6,
+                          maxWidth: '80%', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          borderRadius: 20,
+                        }}>
+                          {text}
+                        </div>
+                      )}
+                      {htmlBlocks.map((html, i) => <HtmlPreview key={i} html={html} />)}
+                    </>
+                  );
+                })() : (
+                  <>
+                    {msg.image && <ImageCard src={msg.image} onClick={() => setPreviewImage(msg.image)} />}
+                    {msg.file && <FileCard file={msg.file} isUser={true} onClick={() => setPreviewFile(msg.file)} />}
+                    {msg.content && (
+                      <div className="bubble-user" style={{
+                        padding: '12px 16px', fontSize: 15, lineHeight: 1.6,
+                        maxWidth: '80%', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        borderRadius: 20,
+                      }}>
+                        {msg.content}
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, padding: '0 6px' }}>
                   {msg.time}
                 </span>
               </div>
             );
           })}
-          
+
           {isTyping && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <div className="bubble-ai" style={{ padding: '14px 18px' }}>
+              <div className="bubble-ai" style={{ padding: '14px 18px', borderRadius: 20 }}>
                 <span className="thinking-dots"><span /><span /><span /></span>
               </div>
             </div>
@@ -327,10 +681,8 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         </div>
       </div>
 
-      {/* 输入区域 */}
       <div style={{
-        flexShrink: 0,
-        padding: '8px 12px calc(92px + var(--safe-bottom))',
+        flexShrink: 0, padding: '8px 12px calc(92px + var(--safe-bottom))',
         background: 'linear-gradient(to top, var(--bg-primary) 80%, transparent)',
       }}>
         <div className="status-bar" style={{ marginBottom: 6 }}>
@@ -339,14 +691,13 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
             {status.zh}
           </span>
         </div>
-        
-        {/* 图片/文件预览 - 居中 */}
+
         {(selectedImage || selectedFile) && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6, gap: 8 }}>
             {selectedImage && (
-              <div className="jelly-card" style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                <Icon name="image" size={14} color="var(--accent)" />
-                <span>图片已选择</span>
+              <div className="jelly-card" style={{ padding: '6px 8px 6px 6px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <img src={selectedImage.dataUrl} style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover' }} />
+                <span>{selectedImage.name}</span>
                 <button onClick={() => setSelectedImage(null)} style={{ background: 'none', border: 'none', padding: 2 }}>
                   <Icon name="x" size={12} />
                 </button>
@@ -363,77 +714,54 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
             )}
           </div>
         )}
-        
-        {/* 戳一戳预览 - 居中，格式 Nana捏捏Arden的头发 */}
+
         {pokeAction && pokePart && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
-            <div className="poke-system-msg" style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '6px 14px', fontSize: 13,
-            }}>
+            <div className="poke-system-msg" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', fontSize: 13 }}>
               <Icon name="finger" size={14} color="var(--accent)" />
               <span>{userName}{pokeAction}{aiName}的{pokePart}</span>
-              <button onClick={() => { setPokeAction(null); setPokePart(null); }} style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-              }}>
+              <button onClick={() => { setPokeAction(null); setPokePart(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
                 <Icon name="x" size={14} />
               </button>
             </div>
           </div>
         )}
-        
+
         <div style={{ position: 'relative' }}>
-          {/* +号弹出菜单 - 离+号更近，透明果冻磨砂 */}
           {showPlusMenu && (
             <div className="plus-menu" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => imageInputRef.current?.click()}
-                className="plus-menu-item"
-              >
+              <button onClick={() => imageInputRef.current?.click()} className="plus-menu-item">
                 <Icon name="image" size={18} color="var(--accent)" />
                 <span>添加图片</span>
               </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="plus-menu-item"
-              >
+              <button onClick={() => fileInputRef.current?.click()} className="plus-menu-item">
                 <Icon name="file" size={18} color="var(--accent)" />
                 <span>添加文件</span>
               </button>
-              <button
-                onClick={() => { setShowPokePanel(true); setShowPlusMenu(false); }}
-                className="plus-menu-item"
-              >
+              <button onClick={() => { setShowPokePanel(true); setShowPlusMenu(false); }} className="plus-menu-item">
                 <Icon name="finger" size={18} color="var(--accent)" />
                 <span>戳一戳</span>
               </button>
             </div>
           )}
-          
-          <div className="jelly-card" style={{
-            display: 'flex', alignItems: 'flex-end', gap: 6, padding: 6,
-          }} onClick={(e) => e.stopPropagation()}>
+
+          <div className="jelly-card" style={{ display: 'flex', alignItems: 'flex-end', gap: 6, padding: 6 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ position: 'relative' }}>
               <button onClick={() => setShowPlusMenu(!showPlusMenu)} className="jelly-button" style={{ width: 38, height: 38 }}>
                 <Icon name="plus" />
               </button>
               <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
-              <input ref={fileInputRef} type="file" accept=".docx,.txt,.pdf" style={{ display: 'none' }} onChange={handleFileSelect} />
+              <input ref={fileInputRef} type="file" accept=".docx,.txt,.pdf,.html,.htm,.md,.csv,.json,.js,.css" style={{ display: 'none' }} onChange={handleFileSelect} />
             </div>
-            
             <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="说点什么..."
-              rows={1}
+              value={inputText} onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown} placeholder="说点什么..." rows={1}
               style={{
                 flex: 1, border: 'none', background: 'transparent',
                 padding: '10px 4px', fontSize: 15, color: 'var(--text-primary)',
                 outline: 'none', resize: 'none', maxHeight: 100, fontFamily: 'inherit',
               }}
             />
-            
             <button onClick={handleSend} className="jelly-button jelly-button-accent" style={{ width: 40, height: 40 }}>
               <Icon name="send" size={18} />
             </button>
@@ -441,33 +769,32 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
         </div>
       </div>
 
-      {/* 思考链弹窗 - 半屏 */}
+      {previewImage && (
+        <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img src={previewImage} style={{ maxWidth: '92%', maxHeight: '88%', borderRadius: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} />
+        </div>
+      )}
+
+      {previewFile && <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
+
       {thinkingId && (
         <div className="modal-overlay" onClick={() => setThinkingId(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, marginTop: 8 }}>
-              Thought process
-            </h3>
+            <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, marginTop: 8 }}>Thought process</h3>
             <p style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--text-secondary)' }}>
               {messages.find(m => m.id === thinkingId)?.thinking}
             </p>
-            <button onClick={() => setThinkingId(null)} className="jelly-button jelly-button-accent" style={{
-              width: '100%', height: 44, marginTop: 18, borderRadius: 22, fontSize: 15,
-            }}>
+            <button onClick={() => setThinkingId(null)} className="jelly-button jelly-button-accent" style={{ width: '100%', height: 44, marginTop: 18, borderRadius: 22, fontSize: 15 }}>
               知道了
             </button>
           </div>
         </div>
       )}
 
-      {/* 戳一戳面板 - 半屏 */}
       {showPokePanel && (
         <div className="modal-overlay" onClick={() => setShowPokePanel(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 18, marginTop: 8 }}>
-              戳一戳
-            </h3>
-            
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 18, marginTop: 8 }}>戳一戳</h3>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>动作</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -482,7 +809,6 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
                 ))}
               </div>
             </div>
-            
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>落在哪</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -497,35 +823,23 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
                 ))}
               </div>
             </div>
-            
-            <button onClick={confirmPoke} className="jelly-button jelly-button-accent" style={{
-              width: '100%', height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600,
-            }}>
+            <button onClick={confirmPoke} className="jelly-button jelly-button-accent" style={{ width: '100%', height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>
               就这一下
             </button>
           </div>
         </div>
       )}
 
-      {/* 模型选择 - 半屏，只显示Gemini系列 */}
       {showModelPicker && (
         <div className="modal-overlay" onClick={() => setShowModelPicker(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 16, marginTop: 8 }}>
-              选择模型
-            </h3>
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 16, marginTop: 8 }}>选择模型</h3>
             {MODELS.map(model => (
               <div key={model.id} onClick={() => { setSelectedModel(model); setShowModelPicker(false); }} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: 14, borderRadius: 14, cursor: 'pointer',
-                marginBottom: 6,
+                display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, cursor: 'pointer', marginBottom: 6,
                 background: selectedModel.id === model.id ? 'var(--accent-lighter)' : 'transparent',
               }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 10,
-                  background: 'var(--accent-light)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon name="api" size={18} color="var(--accent)" />
                 </div>
                 <div style={{ flex: 1 }}>
