@@ -324,9 +324,13 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
       try {
         const modelName = selectedModel?.id || settings?.model || 'glm-4.5-air';
         const result = await sendMessage(sessionId, pokeContent, modelName, null);
-        const aiTokens = result.tokens || Math.ceil(result.reply.length / 2);
-        const aiMsg = { id: Date.now() + 1, role: 'assistant', content: result.reply, time: getTime(), tokens: aiTokens, tools: null, image: null, file: null };
-        setMessages(prev => [...prev, aiMsg]);
+        const replies = result.replies || [result.reply];
+        let baseId = Date.now();
+        replies.forEach((text, i) => {
+          if (!text.trim()) return;
+          const aiMsg = { id: baseId + i, role: 'assistant', content: text, time: getTime(), tokens: Math.ceil(text.length / 2), tools: null, image: null, file: null };
+          setMessages(prev => [...prev, aiMsg]);
+        });
         setStatus(getRandomStatus());
       } catch (err) {
         console.error('戳一戳失败:', err);
@@ -376,9 +380,13 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     try {
       const modelName = selectedModel?.id || settings?.model || 'glm-4.5-air';
       const result = await sendMessage(sessionId, sendContent, modelName, fileData);
-      const aiTokens = result.tokens || Math.ceil(result.reply.length / 2);
-      const aiMsg = { id: Date.now() + 1, role: 'assistant', content: result.reply, time: getTime(), tokens: aiTokens, tools: null, image: null, file: null };
-      setMessages(prev => [...prev, aiMsg]);
+      const replies = result.replies || [result.reply];
+      let baseId = Date.now();
+      replies.forEach((text, i) => {
+        if (!text.trim()) return;
+        const aiMsg = { id: baseId + i, role: 'assistant', content: text, time: getTime(), tokens: Math.ceil(text.length / 2), tools: null, image: null, file: null };
+        setMessages(prev => [...prev, aiMsg]);
+      });
       setStatus(getRandomStatus());
     } catch (err) {
       console.error('发送失败:', err);
