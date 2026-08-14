@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, updateSettings, getUsage, getMemories, createMemory, deleteMemory } from '../api';
+import { getPushPublicKey, subscribePush, unsubscribePush } from '../api';
 
 const CLAUDE_MODEL = { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' };
 
@@ -123,6 +124,10 @@ export default function SettingsView() {
   const [usageData, setUsageData] = useState(null);
   
   const saveTimerRef = useRef(null);
+
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
 
   useEffect(() => {
     loadSettings();
@@ -266,6 +271,49 @@ export default function SettingsView() {
       console.error('删除失败:', error);
     }
   };
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+  }
+
+  const handlePushToggle = async () => {
+    if (pushLoading) return;
+    setPushLoading(true);
+    try {
+      if (pushEnabled) {
+        await unsubscribePush();
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+        setPushEnabled(false);
+      } else {
+        const publicKey = await getPushPublicKey();
+        if (!publicKey) { alert('推送未配置'); return; }
+        const reg = await navigator.serviceWorker.ready;
+        const subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+        await subscribePush({
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')))),
+            auth: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth'))))
+          }
+        });
+        setPushEnabled(true);
+      }
+    } catch (e) {
+      console.error('推送设置失败:', e);
+      alert('推送设置失败：' + e.message);
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
@@ -566,7 +614,7 @@ export default function SettingsView() {
           right={<span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{customFontName || '系统默认'}</span>}
           onClick={() => setPage('font')}
         />
-        <ListItem
+                <ListItem
           label="深色模式"
           right={
             <button
@@ -576,7 +624,19 @@ export default function SettingsView() {
             />
           }
         />
+        <ListItem
+          label="推送通知"
+          right={
+            <button
+              onClick={handlePushToggle}
+              disabled={pushLoading}
+              className={`toggle-switch ${pushEnabled ? 'active' : ''}`}
+              aria-label="切换推送通知"
+            />
+          }
+        />
       </div>
+
       
       <div className="jelly-card" style={{ padding: '4px 16px' }}>
         <ListItem label="参考资料" onClick={() => setPage('files')} />

@@ -51,3 +51,19 @@ export const getMcpServers = () => api.get('/api/mcp').then(r => r.data);
 export const toggleMcpServer = (id) => api.patch(`/api/mcp/${id}/toggle`).then(r => r.data);
 export const addMcpServer = (data) => api.post('/api/mcp', data).then(r => r.data);
 export const deleteMcpServer = (id) => api.delete(`/api/mcp/${id}`).then(r => r.data);
+
+// ===== 推送通知 =====
+export async function getPushPublicKey() {
+  const res = await axios.get(`${BASE_URL}/api/push/public-key`);
+  return res.data.publicKey;
+}
+
+export async function subscribePush(subscription) {
+  const res = await axios.post(`${BASE_URL}/api/push/subscribe`, subscription);
+  return res.data;
+}
+
+export async function unsubscribePush() {
+  const res = await axios.post(`${BASE_URL}/api/push/unsubscribe`);
+  return res.data;
+}
