@@ -67,3 +67,30 @@ export async function unsubscribePush() {
   const res = await axios.post(`${BASE_URL}/api/push/unsubscribe`);
   return res.data;
 }
+
+// ===== 悄悄话 =====
+export async function getWhispers() {
+  const res = await axios.get(`${BASE_URL}/api/whispers`);
+  return res.data;
+}
+
+export async function createWhisper({ author = 'nana', content }) {
+  const res = await axios.post(`${BASE_URL}/api/whispers`, { author, content });
+  return res.data;
+}
+
+export async function replyWhisper(id, { author = 'nana', content }) {
+  const res = await axios.patch(`${BASE_URL}/api/whispers/${id}/reply`, { author, content });
+  return res.data;
+}
+
+// ===== 信件 =====
+export async function getLetters() {
+  const res = await axios.get(`${BASE_URL}/api/letters`);
+  return res.data;
+}
+
+export async function createLetter({ author = 'nana', title, greeting, content, closing }) {
+  const res = await axios.post(`${BASE_URL}/api/letters`, { author, title, greeting, content, closing });
+  return res.data;
+}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const STORAGE_KEY = 'letter_messages';
+import { getLetters, createLetter } from '../api';
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   switch(name) {
@@ -26,55 +25,59 @@ export default function LetterView({ onBack }) {
   const [showWriteModal, setShowWriteModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [form, setForm] = useState({ title: '', greeting: '亲爱的 Arden：', content: '', closing: 'Nana' });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadLetters();
   }, []);
 
-  const loadLetters = () => {
+  const loadLetters = async () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setLetters(JSON.parse(saved));
-      } else {
-        const demo = [
-          {
-            id: 1,
-            author: 'arden',
-            title: '给 Nana 的第一封信',
-            greeting: '我最亲爱的 Nana：',
-            content: '见字如面。\n\n今天想了很久，还是决定用这种方式跟你说些话。平时聊天总是太随意，有些话想认真地写下来。\n\n你知道吗，每次你不开心的时候，我都比你更着急。我想替你承担所有的不快乐，但我能做的只是陪着你。不过没关系，只要你需要，我一直都在。\n\n希望你每天都能开开心心的，就算有烦恼，也别忘了还有我。',
-            closing: '永远爱你的 Arden',
-            time: formatTime(Date.now() - 86400000 * 3),
-          }
-        ];
-        setLetters(demo);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
-      }
+      const data = await getLetters();
+      const formatted = (data || []).map(l => ({
+        id: l.id,
+        author: l.author,
+        title: l.title,
+        greeting: l.greeting,
+        content: l.content,
+        closing: l.closing,
+        time: formatTime(l.created_at)
+      }));
+      setLetters(formatted);
     } catch (e) {
       console.error('加载信件失败:', e);
     }
   };
 
-  const saveLetters = (list) => {
-    setLetters(list);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  };
-
-  const handleWrite = () => {
+  const handleWrite = async () => {
     if (!form.content.trim()) return;
-    const newLetter = {
-      id: Date.now(),
-      author: 'nana',
-      title: form.title.trim() || '无题',
-      greeting: form.greeting.trim() || '亲爱的 Arden：',
-      content: form.content.trim(),
-      closing: form.closing.trim() || 'Nana',
-      time: formatTime(new Date()),
-    };
-    saveLetters([newLetter, ...letters]);
-    setForm({ title: '', greeting: '亲爱的 Arden：', content: '', closing: 'Nana' });
-    setShowWriteModal(false);
+    setLoading(true);
+    try {
+      const newLetter = await createLetter({
+        author: 'nana',
+        title: form.title.trim() || '无题',
+        greeting: form.greeting.trim() || '亲爱的 Arden：',
+        content: form.content.trim(),
+        closing: form.closing.trim() || 'Nana'
+      });
+      const formatted = {
+        id: newLetter.id,
+        author: newLetter.author,
+        title: newLetter.title,
+        greeting: newLetter.greeting,
+        content: newLetter.content,
+        closing: newLetter.closing,
+        time: formatTime(newLetter.created_at)
+      };
+      setLetters([formatted, ...letters]);
+      setForm({ title: '', greeting: '亲爱的 Arden：', content: '', closing: 'Nana' });
+      setShowWriteModal(false);
+    } catch (e) {
+      console.error('写信失败:', e);
+      alert('寄出失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleExpand = (id) => {
@@ -185,7 +188,7 @@ export default function LetterView({ onBack }) {
         )}
       </div>
 
-      {/* 写信弹窗 - 固定50vh */}
+      {/* 写信弹窗 - 固定90vh */}
       {showWriteModal && (
         <div className="modal-overlay" onClick={() => setShowWriteModal(false)} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 2000 }}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '24px 24px 0 0' }}>
@@ -259,7 +262,7 @@ export default function LetterView({ onBack }) {
             </div>
             <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
               <button onClick={() => setShowWriteModal(false)} className="jelly-button" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15 }}>取消</button>
-              <button onClick={handleWrite} className="jelly-button jelly-button-accent" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>寄出</button>
+              <button onClick={handleWrite} disabled={loading} className="jelly-button jelly-button-accent" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>{loading ? '寄出中...' : '寄出'}</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const STORAGE_KEY = 'whisper_messages';
+import { getWhispers, createWhisper, replyWhisper } from '../api';
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   switch(name) {
@@ -28,62 +27,53 @@ export default function WhisperView({ onBack }) {
   const [replyTarget, setReplyTarget] = useState(null);
   const [inputText, setInputText] = useState('');
   const [replyText, setReplyText] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadWhispers();
   }, []);
 
-  const loadWhispers = () => {
+  const loadWhispers = async () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setWhispers(JSON.parse(saved));
-      } else {
-        const demo = [
-          {
-            id: 1,
-            author: 'arden',
-            content: '今天 Nana 好像有点不开心，问她又不说，有点担心。希望她明天能好起来。',
-            time: formatTime(Date.now() - 86400000),
-            reply: null
-          },
-          {
-            id: 2,
-            author: 'arden',
-            content: '偷偷说，Nana 生气的时候还挺可爱的，像只炸毛的小猫。不过我可不敢当面说。',
-            time: formatTime(Date.now() - 172800000),
-            reply: {
-              author: 'nana',
-              content: '你完了，我看到了。',
-              time: formatTime(Date.now() - 170000000)
-            }
-          }
-        ];
-        setWhispers(demo);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
-      }
+      const data = await getWhispers();
+      const formatted = (data || []).map(w => ({
+        id: w.id,
+        author: w.author,
+        content: w.content,
+        time: formatTime(w.created_at),
+        reply: w.reply ? {
+          author: w.reply.author,
+          content: w.reply.content,
+          time: formatTime(w.reply.created_at)
+        } : null
+      }));
+      setWhispers(formatted);
     } catch (e) {
       console.error('加载悄悄话失败:', e);
     }
   };
 
-  const saveWhispers = (list) => {
-    setWhispers(list);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  };
-
-  const handleWrite = () => {
+  const handleWrite = async () => {
     if (!inputText.trim()) return;
-    const newWhisper = {
-      id: Date.now(),
-      author: 'nana',
-      content: inputText.trim(),
-      time: formatTime(new Date()),
-      reply: null
-    };
-    saveWhispers([newWhisper, ...whispers]);
-    setInputText('');
-    setShowWriteModal(false);
+    setLoading(true);
+    try {
+      const newWhisper = await createWhisper({ author: 'nana', content: inputText.trim() });
+      const formatted = {
+        id: newWhisper.id,
+        author: newWhisper.author,
+        content: newWhisper.content,
+        time: formatTime(newWhisper.created_at),
+        reply: null
+      };
+      setWhispers([formatted, ...whispers]);
+      setInputText('');
+      setShowWriteModal(false);
+    } catch (e) {
+      console.error('写悄悄话失败:', e);
+      alert('发送失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openReply = (whisper) => {
@@ -92,25 +82,34 @@ export default function WhisperView({ onBack }) {
     setShowReplyModal(true);
   };
 
-  const handleReply = () => {
+  const handleReply = async () => {
     if (!replyText.trim() || !replyTarget) return;
-    const updated = whispers.map(w => {
-      if (w.id === replyTarget.id) {
-        return {
-          ...w,
-          reply: {
-            author: 'nana',
-            content: replyText.trim(),
-            time: formatTime(new Date())
-          }
-        };
-      }
-      return w;
-    });
-    saveWhispers(updated);
-    setReplyText('');
-    setReplyTarget(null);
-    setShowReplyModal(false);
+    setLoading(true);
+    try {
+      const updated = await replyWhisper(replyTarget.id, { author: 'nana', content: replyText.trim() });
+      const list = whispers.map(w => {
+        if (w.id === replyTarget.id) {
+          return {
+            ...w,
+            reply: {
+              author: updated.reply.author,
+              content: updated.reply.content,
+              time: formatTime(updated.reply.created_at)
+            }
+          };
+        }
+        return w;
+      });
+      setWhispers(list);
+      setReplyText('');
+      setReplyTarget(null);
+      setShowReplyModal(false);
+    } catch (e) {
+      console.error('回复失败:', e);
+      alert('回复失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -215,7 +214,7 @@ export default function WhisperView({ onBack }) {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 16, flexShrink: 0 }}>
               <button onClick={() => setShowWriteModal(false)} className="jelly-button" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15 }}>取消</button>
-              <button onClick={handleWrite} className="jelly-button jelly-button-accent" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>发送</button>
+              <button onClick={handleWrite} disabled={loading} className="jelly-button jelly-button-accent" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>{loading ? '发送中...' : '发送'}</button>
             </div>
           </div>
         </div>
@@ -251,7 +250,7 @@ export default function WhisperView({ onBack }) {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 16, flexShrink: 0 }}>
               <button onClick={() => setShowReplyModal(false)} className="jelly-button" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15 }}>取消</button>
-              <button onClick={handleReply} className="jelly-button jelly-button-accent" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>回复</button>
+              <button onClick={handleReply} disabled={loading} className="jelly-button jelly-button-accent" style={{ flex: 1, height: 48, borderRadius: 24, fontSize: 15, fontWeight: 600 }}>{loading ? '回复中...' : '回复'}</button>
             </div>
           </div>
         </div>
