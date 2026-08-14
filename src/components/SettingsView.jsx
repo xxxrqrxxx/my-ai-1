@@ -130,8 +130,21 @@ export default function SettingsView() {
 
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+  loadSettings();
+  checkPushStatus();
+}, []);
+
+  const checkPushStatus = async () => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) setPushEnabled(true);
+  } catch (e) {
+    console.error('检查推送状态失败:', e);
+  }
+  };
+
 
   useEffect(() => {
     const savedFont = localStorage.getItem('custom_font');
