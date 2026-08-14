@@ -3,7 +3,7 @@ import { STATUS_WORDS, getRandomStatus } from '../statusWords';
 import { POKE_ACTIONS, POKE_PARTS } from '../mockData';
 import { sendMessage, getMessages } from '../api';
 
-const CLAUDE_MODEL = { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', defaultModel: 'claude-sonnet-4-6' };
+const CLAUDE_MODEL = { id: 'glm-4.5-air', name: 'GLM-4.5-Air（测试中）', defaultModel: 'glm-4.5-air' };
 
 const Icon = ({ name, size = 20, color = 'var(--text-secondary)' }) => {
   const sw = 1.8;
@@ -201,11 +201,10 @@ const HtmlPreview = ({ html }) => {
   return (
     <div style={{ marginTop: 8, maxWidth: '88%', alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--glass-bg)', backdropFilter: 'blur(20px)', border: '1px solid var(--glass-border)', boxShadow: 'var(--shadow)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'linear-gradient(135deg, rgba(245,202,216,0.45), rgba(240,188,204,0.3))', borderBottom: '1px solid var(--glass-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF8A80' }} />
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FFD180' }} />
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#B9F6CA' }} />
-          <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>页面预览</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F4B5C5' }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F7C4D0' }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FBDDE6' }} />
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={handleCopy} style={{ background: 'var(--glass-bg-strong)', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer' }}>{copied ? '已复制' : '复制代码'}</button>
@@ -270,16 +269,32 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     setLoadingHistory(true);
     try {
       const history = await getMessages(sessionId);
-      const formatted = (history || []).map(m => ({
-        id: m.id,
-        role: m.role,
-        content: cleanMessageContent(m.content),
-        time: m.created_at ? new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
-        tokens: m.tokens || 0,
-        tools: null,
-        image: m.file_data?.image || null,
-        file: m.file_data?.file || null,
-      }));
+        const formatted = (history || []).map(m => {
+        const isPoke = m.content?.startsWith('[戳一戳] ');
+        let role = m.role;
+        let content = cleanMessageContent(m.content);
+        if (isPoke) {
+          const rest = m.content.replace('[戳一戳] ', '');
+          if (/^\[.+了.+\]\s+.+/.test(rest)) {
+            role = 'user';
+            content = rest;
+          } else {
+            role = 'system';
+            content = rest;
+          }
+        }
+        return {
+          id: m.id,
+          role,
+          content,
+          time: m.created_at ? new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
+          tokens: m.tokens || 0,
+          tools: null,
+          image: m.file_data?.image || null,
+          file: m.file_data?.file || null,
+        };
+      });
+
       setMessages(formatted);
     } catch (err) {
       console.error('加载历史失败:', err);
@@ -300,16 +315,35 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     if (!sessionId) return;
 
     if (pokeAction && pokePart && !inputText.trim() && !selectedImage && !selectedFile) {
-      const pokeMsg = { id: Date.now(), role: 'system', content: `${userName}${pokeAction}${aiName}的${pokePart}`, time: getTime(), tokens: 0 };
+      const pokeText = `${userName}${pokeAction}${aiName}的${pokePart}`;
+      const pokeContent = `[戳一戳] ${pokeText}`;
+      const pokeMsg = { id: Date.now(), role: 'system', content: pokeText, time: getTime(), tokens: 0 };
       setMessages(prev => [...prev, pokeMsg]);
       setPokeAction(null); setPokePart(null); setShowPlusMenu(false);
+      setIsTyping(true); setStatus(getRandomStatus());
+      try {
+        const modelName = selectedModel?.id || settings?.model || 'glm-4.5-air';
+        const result = await sendMessage(sessionId, pokeContent, modelName, null);
+        const aiTokens = result.tokens || Math.ceil(result.reply.length / 2);
+        const aiMsg = { id: Date.now() + 1, role: 'assistant', content: result.reply, time: getTime(), tokens: aiTokens, tools: null, image: null, file: null };
+        setMessages(prev => [...prev, aiMsg]);
+        setStatus(getRandomStatus());
+      } catch (err) {
+        console.error('戳一戳失败:', err);
+        const errorMsg = { id: Date.now() + 1, role: 'assistant', content: '嗯？', time: getTime(), tokens: 0 };
+        setMessages(prev => [...prev, errorMsg]);
+      } finally {
+        setIsTyping(false);
+      }
       return;
     }
+
 
     let displayContent = inputText;
     if (pokeAction && pokePart) displayContent = `[${pokeAction}了${pokePart}] ${inputText}`.trim();
 
     let sendContent = displayContent;
+    if (pokeAction && pokePart && inputText.trim()) sendContent = `[戳一戳] ${displayContent}`;
     if (selectedImage) sendContent = '[图片] ' + sendContent;
     if (selectedFile?.content) {
       sendContent = `[用户上传了文件：${selectedFile.name}]\n以下是文件的完整内容，请直接阅读参考，不需要"打开"文件：\n\n----- 文件内容开始 -----\n${selectedFile.content}\n----- 文件内容结束 -----\n\n${sendContent}`.trim();
@@ -340,7 +374,7 @@ export default function ChatView({ aiName, userName, onOpenSidebar, sessionId, s
     setIsTyping(true); setStatus(getRandomStatus());
 
     try {
-      const modelName = selectedModel?.id || settings?.model || 'claude-sonnet-4-6';
+      const modelName = selectedModel?.id || settings?.model || 'glm-4.5-air';
       const result = await sendMessage(sessionId, sendContent, modelName, fileData);
       const aiTokens = result.tokens || Math.ceil(result.reply.length / 2);
       const aiMsg = { id: Date.now() + 1, role: 'assistant', content: result.reply, time: getTime(), tokens: aiTokens, tools: null, image: null, file: null };

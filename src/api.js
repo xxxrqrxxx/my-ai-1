@@ -18,7 +18,7 @@ export const renameSession = (id, name) => api.patch(`/api/sessions/${id}`, { na
 
 // ===== 消息相关 =====
 export const getMessages = (sessionId) => api.get(`/api/messages/${sessionId}`).then(r => r.data);
-export const sendMessage = (sessionId, message, model = 'gemini-2.0-flash', fileData = null) => 
+export const sendMessage = (sessionId, message, model = 'glm-4.5-air', fileData = null) => 
     api.post('/api/chat', { sessionId, message, model, file_data: fileData }).then(r => r.data);
 
 
